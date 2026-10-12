@@ -1,0 +1,12 @@
+{
+  "name": "llm-invalid-json",
+  "description": "模拟 LLM 返回坏 JSON（Markdown 包裹 + 缺字段）：第一轮校验失败后触发一次修复请求；若修复仍失败则记录 LLM_BAD_JSON。标记：模拟数据。",
+  "simulated": true,
+  "firstResponseText": "```json\n{\"issues\":[{\"type\":\"绝对化\",\"segmentIds\":[],\"quote\":\"\",\"basis\":\"\",\"recommendation\":\"\",\"confidence\":2.0,\"needsReview\":\"是\"}]}\n```",
+  "repairResponseText": "{\"issues\":[],\"frameworkStateSummary\":\"\"}",
+  "expect": {
+    "firstRoundValid": false,
+    "repairRoundValid": true,
+    "finalIssueCount": 0
+  }
+}

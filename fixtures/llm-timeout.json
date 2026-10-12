@@ -1,0 +1,14 @@
+{
+  "name": "llm-timeout",
+  "description": "模拟 LLM 请求超时：请求挂起直到超过 request_timeout_ms。验证超时被记录为失败分析、不影响实时字幕。标记：模拟数据。",
+  "simulated": true,
+  "behavior": {
+    "type": "timeout",
+    "request_timeout_ms": 30000,
+    "note": "服务器不响应，客户端 AbortController 在 request_timeout_ms 后中止"
+  },
+  "expect": {
+    "error": "LLM_FAILED",
+    "realtimeTranscriptUnaffected": true
+  }
+}

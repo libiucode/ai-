@@ -1,0 +1,13 @@
+{
+  "name": "llm-fake-evidence",
+  "description": "模拟 LLM 伪造证据：引用不存在的 segmentId、quote 不是原文子串。verifyIssues 必须全部拒绝，UI 显示分析失败/待核查。标记：模拟数据。",
+  "simulated": true,
+  "inputSegments": [
+    { "segmentId": "seg-1", "startMs": 0, "endMs": 5000, "text": "这款杯子性价比很高" }
+  ],
+  "responseText": "{\"issues\":[{\"type\":\"unverifiedClaim\",\"severity\":\"warning\",\"segmentIds\":[\"seg-999\"],\"quote\":\"性价比很高\",\"basis\":\"引用了不存在的片段\",\"recommendation\":\"应该被拒绝\",\"confidence\":0.8,\"needsReview\":false},{\"type\":\"bannedWord\",\"severity\":\"critical\",\"segmentIds\":[\"seg-1\"],\"quote\":\"性价比无敌天下第一\",\"basis\":\"quote 不是原文子串\",\"recommendation\":\"应该被拒绝\",\"confidence\":0.8,\"needsReview\":false}]}",
+  "expect": {
+    "validIssueCount": 0,
+    "droppedCount": 2
+  }
+}

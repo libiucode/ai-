@@ -1,76 +1,71 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { MonitorPage } from "./pages/MonitorPage";
+import { FrameworkPage } from "./pages/FrameworkPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { HistoryPage } from "./pages/HistoryPage";
+import { tokens } from "./ui/basics";
 
-declare global {
-  interface Window {
-    appApi: {
-      startSession(config: { audioSource: "microphone" | "systemLoopback"; deviceId?: string | null }): Promise<{ sessionId: string; error: unknown }>;
-      pauseSession(): Promise<void>;
-      stopSession(): Promise<void>;
-      listAudioDevices(): Promise<Array<{ id: string; label: string; kind: string; isDefault: boolean }>>;
-      subscribeEvents(event: string, listener: (payload: unknown) => void): () => void;
-      sendAudioChunk(data: Float32Array, sourceRate: number): void;
-    };
-  }
-}
+type Tab = "monitor" | "framework" | "settings" | "history";
+
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "monitor", label: "实时监控" },
+  { key: "framework", label: "话术配置" },
+  { key: "settings", label: "分析设置" },
+  { key: "history", label: "历史与报告" },
+];
 
 export default function App() {
-  const [status, setStatus] = useState("未开始");
-  const [finalTexts, setFinalTexts] = useState<string[]>([]);
-  const [partialText, setPartialText] = useState("");
-  const [issues, setIssues] = useState<string[]>([]);
-
-  useEffect(() => {
-    const off1 = window.appApi.subscribeEvents("transcript.final", (p) => {
-      const seg = p as { text: string };
-      setFinalTexts((prev) => [...prev.slice(-100), seg.text]);
-    });
-    const off2 = window.appApi.subscribeEvents("transcript.partial", (p) => {
-      setPartialText((p as { text: string }).text);
-    });
-    const off3 = window.appApi.subscribeEvents("analysis.issues", (p) => {
-      const arr = p as Array<{ type: string; quote: string; recommendation: string }>;
-      setIssues(arr.map((i) => `[${i.type}] ${i.quote}: ${i.recommendation}`));
-    });
-    return () => {
-      off1();
-      off2();
-      off3();
-    };
-  }, []);
-
-  async function startMic() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const ctx = new AudioContext();
-    const src = ctx.createMediaStreamSource(stream);
-    const proc = ctx.createScriptProcessor(4096, 1, 1);
-    proc.onaudioprocess = (e) => {
-      window.appApi.sendAudioChunk(new Float32Array(e.inputBuffer.getChannelData(0)), ctx.sampleRate);
-    };
-    src.connect(proc);
-    proc.connect(ctx.destination);
-    await window.appApi.startSession({ audioSource: "microphone", deviceId: null });
-    setStatus("采集中（麦克风）");
-  }
+  const [tab, setTab] = useState<Tab>("monitor");
+  const [monitorResetKey, setMonitorResetKey] = useState(0);
 
   return (
-    <div style={{ padding: 24, fontFamily: "sans-serif" }}>
-      <h1>AI 盯播工具</h1>
-      <div>状态: {status}</div>
-      <button onClick={startMic}>开始麦克风监听</button>
-      <button onClick={() => window.appApi.stopSession()}>停止</button>
-      <h2>实时字幕</h2>
-      <div style={{ color: "#888" }}>{partialText}</div>
-      <div>
-        {finalTexts.map((t, i) => (
-          <div key={i}>{t}</div>
+    <div style={{ minHeight: "100vh", background: tokens.bg, color: tokens.text, fontFamily: '"Microsoft YaHei", system-ui, sans-serif' }}>
+      <nav
+        style={{
+          display: "flex",
+          gap: 4,
+          padding: "8px 20px",
+          background: tokens.panel,
+          borderBottom: `1px solid ${tokens.border}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div style={{ fontWeight: 700, marginRight: 24, fontSize: 15 }}>AI 盯播工具</div>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: "6px 14px",
+              fontSize: 13,
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              background: tab === t.key ? tokens.accentSoft : "transparent",
+              color: tab === t.key ? tokens.accent : tokens.textDim,
+              fontWeight: tab === t.key ? 600 : 400,
+            }}
+          >
+            {t.label}
+          </button>
         ))}
-      </div>
-      <h2>问题提醒</h2>
-      <ul>
-        {issues.map((t, i) => (
-          <li key={i}>{t}</li>
-        ))}
-      </ul>
+        <div style={{ marginLeft: "auto", fontSize: 12, color: tokens.textDim, alignSelf: "center" }}>
+          MVP · 本地运行 · 数据不出本机
+        </div>
+      </nav>
+      <main style={{ padding: "16px 0 40px" }}>
+        {tab === "monitor" ? (
+          <MonitorPage key={monitorResetKey} onOpenHistory={() => { setMonitorResetKey((k) => k + 1); setTab("history"); }} />
+        ) : tab === "framework" ? (
+          <FrameworkPage />
+        ) : tab === "settings" ? (
+          <SettingsPage />
+        ) : (
+          <HistoryPage />
+        )}
+      </main>
     </div>
   );
 }

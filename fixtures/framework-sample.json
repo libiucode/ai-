@@ -1,0 +1,26 @@
+{
+  "name": "framework-sample",
+  "description": "示例话术框架（模拟数据）：商品介绍四步 + 自定义规则。可从话术配置页导入。",
+  "simulated": true,
+  "framework": {
+    "id": "fw-sample-thermos",
+    "name": "保温杯直播话术（示例）",
+    "productFacts": "已核实：304不锈钢内胆；实验室恒温测试12小时（25℃环境）；容量500ml；通过国家GB4806食品接触材料检测。",
+    "updatedAt": "2026-10-12T00:00:00.000Z",
+    "steps": [
+      { "id": "st-1", "frameworkId": "fw-sample-thermos", "name": "开场欢迎", "priority": 2, "maxWaitMs": 60000 },
+      { "id": "st-2", "frameworkId": "fw-sample-thermos", "name": "商品卖点讲解", "priority": 2, "maxWaitMs": 180000 },
+      { "id": "st-3", "frameworkId": "fw-sample-thermos", "name": "互动答疑", "priority": 1, "maxWaitMs": 120000 },
+      { "id": "st-4", "frameworkId": "fw-sample-thermos", "name": "下单引导CTA", "priority": 2, "maxWaitMs": 300000 }
+    ],
+    "rules": [
+      { "id": "rl-1", "frameworkId": "fw-sample-thermos", "stepId": null, "ruleType": "bannedWord", "pattern": "最好|第一|顶级", "enabled": true },
+      { "id": "rl-2", "frameworkId": "fw-sample-thermos", "stepId": "st-2", "ruleType": "unverifiedClaim", "pattern": "获奖|冠军|检测认证", "enabled": true },
+      { "id": "rl-3", "frameworkId": "fw-sample-thermos", "stepId": null, "ruleType": "hotWord", "pattern": "保温十二小时|304不锈钢", "enabled": true }
+    ]
+  },
+  "notes": {
+    "priority": "0=可选 1=建议 2=必须",
+    "productFactsUsage": "productFacts 仅允许作为 AI 判断输入的已核实事实；rules 中 hotWord 类规则命中只作提示，不直接判定违法"
+  }
+}

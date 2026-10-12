@@ -1,0 +1,14 @@
+{
+  "name": "llm-valid",
+  "description": "模拟 LLM 正常返回：符合 LlmAnalysisResultSchema 的 JSON，quote 为 segment 原文子串。标记：模拟数据。",
+  "simulated": true,
+  "inputSegments": [
+    { "segmentId": "seg-1", "startMs": 0, "endMs": 5000, "text": "这个保温杯百分之百保温二十四小时" },
+    { "segmentId": "seg-2", "startMs": 5000, "endMs": 10000, "text": "所有人用了都说好，赶紧下单" }
+  ],
+  "responseText": "{\"issues\":[{\"type\":\"absolutization\",\"severity\":\"warning\",\"segmentIds\":[\"seg-1\"],\"quote\":\"百分之百保温二十四小时\",\"basis\":\"宣称绝对化效果，属于绝对化用语\",\"recommendation\":\"改为“保温效果经过实验室测试”，并说明测试条件\",\"suggestedScript\":\"这款杯子保温实验实测二十四小时，具体因使用环境略有差异\",\"confidence\":0.9,\"needsReview\":false}],\"frameworkStateSummary\":\"已进入商品介绍阶段\"}",
+  "expect": {
+    "issueCount": 1,
+    "issueType": "absolutization"
+  }
+}

@@ -129,9 +129,12 @@ export class SessionOrchestrator {
         false,
       ));
     }
+    // llm config is stored without api_key (kept separately in llm_api_key);
+    // re-attach it here so Zod validation passes
     if (settings.llm?.base_url && settings.llm?.model) {
+      const llmApiKey = this.store.getSetting("llm_api_key");
       try {
-        this.llm.configure(settings.llm);
+        this.llm.configure({ ...settings.llm, api_key: llmApiKey ?? "" });
       } catch {
         /* llm misconfigured: analysis disabled */
       }

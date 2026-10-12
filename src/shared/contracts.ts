@@ -181,6 +181,71 @@ export interface AudioDevice {
   isDefault: boolean;
 }
 
+/** Summary row for the session history list. */
+export interface SessionSummary {
+  id: string;
+  startedAtIso: string;
+  endedAtIso: string | null;
+  audioSource: "microphone" | "systemLoopback";
+  status: string;
+  finalSegmentCount: number;
+  issueCount: number;
+  hasGap: boolean;
+}
+
+/** Aggregated report data built from the real database. */
+export interface ReportSummary {
+  session: {
+    id: string;
+    startedAtIso: string;
+    endedAtIso: string | null;
+    audioSource: string;
+    listenedMs: number;
+  };
+  asr: {
+    connectionCount: number;
+    disconnectCount: number;
+    gapCount: number;
+  };
+  issues: {
+    total: number;
+    bySeverity: Record<string, number>;
+    byType: Record<string, number>;
+    confirmed: number;
+    needsReview: number;
+  };
+  issueTimeline: Array<{
+    issueId: string;
+    type: string;
+    severity: string;
+    firstSeenMs: number;
+    quote: string;
+    segmentIds: string[];
+    basis: string;
+    recommendation: string;
+  }>;
+  metrics: {
+    speechMs: number;
+    silenceMs: number;
+    chineseChars: number;
+    englishWords: number;
+    charsPerSpeechMinute: number;
+    charsPerTotalMinute: number;
+    longestSilenceMs: number;
+  };
+  llm: {
+    requestCount: number;
+    failedCount: number;
+    estimatedTokens: number;
+  };
+  analysisRuns: {
+    total: number;
+    success: number;
+    failed: number;
+  };
+  generatedAtIso: string;
+}
+
 export interface Settings {
   llm?: {
     base_url?: string;
@@ -189,6 +254,14 @@ export interface Settings {
     request_timeout_ms?: number;
     max_retries?: number;
     budget_limit?: number;
+  };
+  asr?: {
+    provider: "tencent";
+    secretId: string;
+    secretKey: string;
+    appId: string;
+    engineModelType?: string;
+    hotwordId?: string;
   };
   windowIntervalSec: 30 | 60 | 120;
   windowSizeSec: 180 | 300 | 600;

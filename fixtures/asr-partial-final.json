@@ -1,0 +1,23 @@
+{
+  "name": "asr-partial-final",
+  "description": "模拟腾讯云实时 ASR：临时分离(slice_type=0/1) → 稳态分离(slice_type=2)。用于验证临时字幕不冒充稳态字幕。",
+  "messages": [
+    {
+      "note": "临时：部分识别结果",
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":2000,\"result\":{\"slice_seq\":1,\"slice_type\":0,\"start_time\":0,\"end_time\":1000,\"result_text\":\"今天给大家\"}}"
+    },
+    {
+      "note": "临时：同一句扩展",
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":4000,\"result\":{\"slice_seq\":2,\"slice_type\":1,\"start_time\":0,\"end_time\":3200,\"result_text\":\"今天给大家介绍这款保温杯\"}}"
+    },
+    {
+      "note": "稳态：本句定稿",
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":5000,\"result\":{\"slice_seq\":3,\"slice_type\":2,\"start_time\":0,\"end_time\":4800,\"result_text\":\"今天给大家介绍这款保温杯\",\"word_list\":[]}}"
+    }
+  ],
+  "expect": {
+    "finalCount": 1,
+    "finalText": "今天给大家介绍这款保温杯",
+    "partialCount": 2
+  }
+}

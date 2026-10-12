@@ -3,6 +3,7 @@ import { migrate } from "./migrations";
 import type {
   Framework,
   Issue,
+  SessionSummary,
   SpeechInterval,
   TranscriptSegment,
 } from "../../shared/contracts";
@@ -44,6 +45,47 @@ export class Store {
     return this.db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
       | { id: string; started_at_iso: string; ended_at_iso: string | null; audio_source: string; device_id: string | null; status: string }
       | undefined;
+  }
+
+  /** Session history rows with aggregate counts (used by the history page). */
+  listSessionSummaries(): SessionSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT s.id, s.started_at_iso, s.ended_at_iso, s.audio_source, s.status,
+           (SELECT COUNT(*) FROM transcript_segments t
+             WHERE t.session_id = s.id AND t.is_final = 1) AS final_segment_count,
+           (SELECT COUNT(*) FROM issues i WHERE i.session_id = s.id) AS issue_count
+         FROM sessions s ORDER BY s.started_at_iso DESC`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: r.id as string,
+      startedAtIso: r.started_at_iso as string,
+      endedAtIso: (r.ended_at_iso as string) ?? null,
+      audioSource: r.audio_source as "microphone" | "systemLoopback",
+      status: r.status as string,
+      finalSegmentCount: r.final_segment_count as number,
+      issueCount: r.issue_count as number,
+      hasGap: false,
+    }));
+  }
+
+  /** Deletes a session and all dependent rows. Returns true if a row was removed. */
+  deleteSession(id: string): boolean {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `DELETE FROM issue_evidence WHERE issue_id IN (SELECT id FROM issues WHERE session_id = ?)`,
+        )
+        .run(id);
+      this.db.prepare(`DELETE FROM issues WHERE session_id = ?`).run(id);
+      this.db.prepare(`DELETE FROM analysis_runs WHERE session_id = ?`).run(id);
+      this.db.prepare(`DELETE FROM speech_intervals WHERE session_id = ?`).run(id);
+      this.db.prepare(`DELETE FROM transcript_segments WHERE session_id = ?`).run(id);
+      const res = this.db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
+      return res.changes > 0;
+    });
+    return tx();
   }
 
   // ---- transcript ----
@@ -244,6 +286,31 @@ export class Store {
     return this.db
       .prepare(`SELECT * FROM issues WHERE session_id=? ORDER BY first_seen_ms`)
       .all(sessionId) as Array<Record<string, unknown>>;
+  }
+
+  getIssue(id: string): Array<Record<string, unknown>> | undefined {
+    const row = this.db.prepare(`SELECT * FROM issues WHERE id=?`).get(id) as
+      | Record<string, unknown>
+      | undefined;
+    return row ? [row] : undefined;
+  }
+
+  /** Aggregate analysis run stats for a session (used by the report). */
+  analysisRunStats(sessionId: string): { total: number; success: number; failed: number } {
+    const rows = this.db
+      .prepare(
+        `SELECT status, COUNT(*) AS n FROM analysis_runs WHERE session_id=? GROUP BY status`,
+      )
+      .all(sessionId) as Array<{ status: string; n: number }>;
+    let total = 0;
+    let success = 0;
+    let failed = 0;
+    for (const r of rows) {
+      total += r.n;
+      if (r.status === "success") success += r.n;
+      if (r.status === "failed" || r.status === "timeout") failed += r.n;
+    }
+    return { total, success, failed };
   }
 
   // ---- settings ----

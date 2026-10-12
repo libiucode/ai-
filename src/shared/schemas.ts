@@ -107,6 +107,9 @@ export type LlmConfig = z.infer<typeof LlmConfigSchema>;
 
 export const SettingsSchema = z.object({
   llm: LlmConfigSchema.partial({ api_key: true }).optional(),
+  // ASR credentials are accepted here for the settings page save, then routed
+  // to the dedicated asr_config storage key and stripped from app_settings.
+  asr: AsrConfigSchema.optional(),
   windowIntervalSec: z.union([
     z.literal(30),
     z.literal(60),
@@ -136,10 +139,16 @@ export const IpcChannels = {
   sessionStart: "session.start",
   sessionPause: "session.pause",
   sessionStop: "session.stop",
+  sessionList: "session.list",
+  sessionDetail: "session.detail",
+  sessionDelete: "session.delete",
   captureListDevices: "capture.listDevices",
   captureSelectDevice: "capture.selectDevice",
+  captureAudioChunk: "capture.audioChunk",
   captureStatus: "capture.status",
   asrStatus: "asr.status",
+  asrTestConnection: "asr.testConnection",
+  llmTestConnection: "llm.testConnection",
   transcriptPartial: "transcript.partial",
   transcriptFinal: "transcript.final",
   analysisStatus: "analysis.status",
@@ -149,5 +158,33 @@ export const IpcChannels = {
   settingsGet: "settings.get",
   settingsSave: "settings.save",
   reportExport: "report.export",
+  reportGenerate: "report.generate",
   appError: "app.error",
 } as const;
+
+/** Zod schema for the full framework payload saved from the script config page. */
+export const FrameworkStepSchema = z.object({
+  id: z.string(),
+  frameworkId: z.string(),
+  name: z.string().min(1),
+  priority: z.number().int().min(0).max(2),
+  maxWaitMs: z.number().int().nonnegative(),
+});
+
+export const FrameworkRuleConfigSchema = z.object({
+  id: z.string(),
+  frameworkId: z.string(),
+  stepId: z.string().nullable(),
+  ruleType: z.enum(["bannedWord", "absolutization", "unverifiedClaim", "repetition", "hotWord"]),
+  pattern: z.string().min(1),
+  enabled: z.boolean(),
+});
+
+export const FrameworkSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  steps: z.array(FrameworkStepSchema),
+  rules: z.array(FrameworkRuleConfigSchema),
+  productFacts: z.string(),
+  updatedAt: z.string(),
+});
