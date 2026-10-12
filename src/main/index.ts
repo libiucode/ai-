@@ -22,7 +22,7 @@ function createWindow() {
   });
   orchestrator.setWindow(mainWindow);
   mainWindow.loadFile(
-    path.join(__dirname, "../renderer/index.html"),
+    path.join(__dirname, "../../renderer/index.html"),
   );
 }
 

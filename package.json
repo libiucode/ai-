@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "AI 盯播工具 - 核心全链路",
-  "main": "dist/main/index.js",
+  "main": "dist/main/main/index.js",
   "scripts": {
     "dev": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json && electron .",
     "dev:renderer": "vite",
