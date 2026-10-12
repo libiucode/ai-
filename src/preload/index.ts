@@ -36,7 +36,16 @@ const api = {
   stopSession: () => ipcRenderer.invoke(IpcChannels.sessionStop),
   listAudioDevices: async (): Promise<AudioDevice[]> => {
     // enumerate via standard browser API (validated main-side)
-    const devices = await navigator.mediaDevices.enumerateDevices();
+    // preload 运行在渲染进程世界，但按 main tsconfig（无 DOM lib）编译，
+    // 因此对 navigator.mediaDevices 使用结构化类型访问
+    const mediaDevices = (globalThis as unknown as {
+      navigator?: {
+        mediaDevices?: {
+          enumerateDevices: () => Promise<Array<{ deviceId: string; label: string; kind: string }>>;
+        };
+      };
+    }).navigator?.mediaDevices;
+    const devices = mediaDevices ? await mediaDevices.enumerateDevices() : [];
     const mics = devices
       .filter((d) => d.kind === "audioinput")
       .map((d, i) => ({

@@ -32,6 +32,7 @@ npm install          # 建议 Node 22 LTS 或更高版本；Windows 建议用 np
 npm test             # vitest 全部测试（46 个）；pretest 自动处理 better-sqlite3 ABI
 npm run typecheck    # tsc 双 tsconfig 校验
 npm run build        # 产出 dist/renderer + dist/main
+npm run smoke        # 真实 Electron 渲染层冒烟：验证预加载生效、React 挂载、无 console 错误（防白屏）
 npm run dev          # 构建 renderer + main 并启动 Electron
 npm run package      # electron-builder 打包 Windows 安装包
 ```
