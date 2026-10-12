@@ -22,7 +22,7 @@ let testAsr: TencentAsrAdapter | null = null;
  * Redacts anything resembling a key/signature from provider error text before
  * it reaches the UI, logs, or exports.
  */
-function redactSecrets(text: string): string {
+export function redactSecrets(text: string): string {
   return text
     .replace(/(secretid|secret_key|secretkey|api[_-]?key|authorization|token|signature)=?[^\s,&"']*/gi, "$1=***")
     .replace(/AKID[A-Za-z0-9]{10,}/g, "AKID***")
