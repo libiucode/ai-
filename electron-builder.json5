@@ -1,0 +1,40 @@
+/**
+ * electron-builder 配置：Windows NSIS 安装包。
+ * 注意 better-sqlite3 原生模块需要针对 Electron ABI 重建（npmRebuild）。
+ */
+{
+  appId: "com.local.ai-live-monitor",
+  productName: "AI盯播工具",
+  directories: {
+    output: "release",
+    buildResources: "build",
+  },
+  files: [
+    "dist/main/**/*",
+    "dist/renderer/**/*",
+    "package.json",
+    "!node_modules/**/prebuilds/**",
+  ],
+  asar: true,
+  asarUnpack: [
+    "node_modules/better-sqlite3/**",
+    "node_modules/bindings/**",
+    "node_modules/file-uri-to-path/**",
+  ],
+  npmRebuild: true,
+  win: {
+    target: [
+      {
+        target: "nsis",
+        arch: ["x64"],
+      },
+    ],
+  },
+  nsis: {
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
+    perMachine: false,
+    deleteAppDataOnUninstall: false,
+    artifactName: "AI盯播工具-Setup-${version}.exe",
+  },
+}
