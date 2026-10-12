@@ -1,5 +1,5 @@
 import type { AsrConfig } from "../../shared/schemas";
-import { AppError, TranscriptSegment } from "../../shared/contracts";
+import { AppError } from "../../shared/contracts";
 
 export type AsrEvent =
   | "partial"

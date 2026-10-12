@@ -5,11 +5,11 @@ import type {
   AudioStatus,
   Framework,
   Issue,
+  ReportFormat,
   Settings,
   StartSessionConfig,
   TranscriptSegment,
 } from "./contracts";
-import type { ReportFormat } from "./schemas";
 
 export interface AnalysisStatusLike {
   running: boolean;

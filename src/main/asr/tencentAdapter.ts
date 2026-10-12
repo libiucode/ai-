@@ -9,7 +9,6 @@ import type {
   Unsubscribe,
 } from "./types";
 import { AsrConfigSchema, type AsrConfig } from "../../shared/schemas";
-import type { AppError } from "../../shared/contracts";
 import { makeError } from "../security/errorFactory";
 import { buildTencentAsrUrl } from "./tencentSign";
 import crypto from "node:crypto";
@@ -126,6 +125,7 @@ export class TencentAsrAdapter implements AsrAdapter {
     });
     // strip secrets from stored url for debug safety
     this.url = url.replace(/secretid=[^&]*/g, "secretid=***");
+    void this.url;
 
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -203,13 +203,14 @@ export class TencentAsrAdapter implements AsrAdapter {
       return;
     }
     if (parsed.type === "ignore") return;
-    if (parsed.seq <= this.lastSeqSeen) return; // dedupe repeats
-    this.lastSeqSeen = parsed.seq;
+    const seq = parsed.seq ?? 0;
+    if (seq <= this.lastSeqSeen) return; // dedupe repeats
+    this.lastSeqSeen = seq;
 
     if (parsed.type === "final") {
       this.emit("final", {
         connectionId: this.connectionId,
-        sourceSeq: parsed.seq,
+        sourceSeq: seq,
         text: parsed.text ?? "",
         startMs: parsed.startMs ?? 0,
         endMs: parsed.endMs ?? 0,
@@ -218,7 +219,7 @@ export class TencentAsrAdapter implements AsrAdapter {
     } else {
       this.emit("partial", {
         connectionId: this.connectionId,
-        sourceSeq: parsed.seq,
+        sourceSeq: seq,
         text: parsed.text ?? "",
         startMs: parsed.startMs ?? 0,
         endMs: parsed.endMs ?? 0,

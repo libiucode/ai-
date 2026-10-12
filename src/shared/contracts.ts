@@ -157,3 +157,48 @@ export interface AnalysisStatus {
   lastRunId: string | null;
   lastRunStatus: AnalysisRunStatus | null;
 }
+
+export interface WindowMetrics {
+  totalMs: number;
+  speechMs: number;
+  silenceMs: number;
+  chineseChars: number;
+  englishWords: number;
+  charsPerSpeechMinute: number;
+  charsPerTotalMinute: number;
+  paceChanges: Array<{ fromMs: number; toMs: number; delta: number }>;
+  longestSilenceMs: number;
+  maxRepeatSimilarity: number;
+  repeatCandidate: { text: string; count: number } | null;
+}
+
+export type ReportFormat = "markdown" | "json";
+
+export interface AudioDevice {
+  id: string;
+  label: string;
+  kind: "microphone" | "systemLoopback";
+  isDefault: boolean;
+}
+
+export interface Settings {
+  llm?: {
+    base_url?: string;
+    model?: string;
+    api_key?: string;
+    request_timeout_ms?: number;
+    max_retries?: number;
+    budget_limit?: number;
+  };
+  windowIntervalSec: 30 | 60 | 120;
+  windowSizeSec: 180 | 300 | 600;
+  paceThreshold?: number;
+  silenceThresholdMs?: number;
+}
+
+export interface StartSessionConfig {
+  audioSource: "microphone" | "systemLoopback";
+  deviceId?: string | null;
+  windowIntervalSec?: number;
+  windowSizeSec?: number;
+}

@@ -1,5 +1,4 @@
-import { AppError, AudioStatus } from "../../shared/contracts";
-import { makeError } from "../security/errorFactory";
+﻿import type { AudioStatus } from "../../shared/contracts";
 
 export interface AudioPacket {
   /** 16kHz 16-bit mono PCM */
@@ -71,7 +70,7 @@ export class PcmResamplerSlicer {
   private buffered = 0;
   private nextStartMs = 0;
 
-  constructor(private startMs = 0) {
+  constructor() {
     // allow up to 1 second of backlog before forced flush
     this.ringBuffer = new Int16Array(SAMPLE_RATE);
   }
@@ -79,7 +78,6 @@ export class PcmResamplerSlicer {
   reset(startMs: number) {
     this.buffered = 0;
     this.nextStartMs = startMs;
-    this.startMs = startMs;
   }
 
   /** input: mono-mixed Float32 samples at sourceRate */

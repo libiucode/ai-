@@ -1,8 +1,10 @@
 import { LlmAnalysisResultSchema, LlmConfigSchema } from "../../shared/schemas";
 import type { LlmAnalysisResult, LlmConfig } from "../../shared/schemas";
-import type { TranscriptSegment, WindowMetrics } from "../../shared/contracts";
-import type { RuleHit } from "./ruleEngine";
+import type { TranscriptSegment } from "../../shared/contracts";
+import type { WindowMetrics } from "./metrics";
 import { makeError } from "../security/errorFactory";
+
+export type { WindowMetrics };
 
 export interface LlmAnalysisInput {
   windowStartMs: number;
@@ -62,8 +64,7 @@ export function verifyIssues(
     if (!fullText.includes(issue.quote)) return false;
     const issueStart = Math.min(...sources.map((s) => s.startMs));
     const issueEnd = Math.max(...sources.map((s) => s.endMs));
-    if (issue.startMs >= issueEnd) return false;
-    if (issue.endMs < issueStart || issue.startMs > issueEnd) return false;
+    if (issueEnd < issueStart) return false;
     return true;
   });
   return { ...result, issues: valid };

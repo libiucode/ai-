@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS transcript_segments (
   id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
+  session_id TEXT,
   connection_id TEXT NOT NULL,
   source_seq INTEGER NOT NULL,
   start_ms INTEGER NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS framework_rules (
 
 CREATE TABLE IF NOT EXISTS analysis_runs (
   id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
+  session_id TEXT,
   window_id TEXT NOT NULL,
   status TEXT NOT NULL,
   started_at TEXT NOT NULL,
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 
 CREATE TABLE IF NOT EXISTS issues (
   id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id),
-  analysis_run_id TEXT NOT NULL REFERENCES analysis_runs(id),
+  session_id TEXT,
+  analysis_run_id TEXT NOT NULL,
   type TEXT NOT NULL,
   severity TEXT NOT NULL,
   start_ms INTEGER NOT NULL,

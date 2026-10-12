@@ -1,5 +1,4 @@
 import Database from "better-sqlite3";
-import path from "node:path";
 import { migrate } from "./migrations";
 import type {
   Framework,
