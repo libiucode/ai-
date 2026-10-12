@@ -1,0 +1,35 @@
+{
+  "name": "ai-live-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 盯播工具 - 核心全链路",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json && electron .",
+    "dev:renderer": "vite",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test": "vitest run",
+    "build": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.0",
+    "@types/react": "^18.3.10",
+    "@types/react-dom": "^18.3.0",
+    "@types/ws": "^8.5.12",
+    "@vitejs/plugin-react": "^4.3.2",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.2"
+  }
+}
