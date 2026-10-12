@@ -8,9 +8,12 @@
     "dev": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json && electron .",
     "dev:renderer": "vite",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "pretest": "node scripts/ensure-sqlite-abi.js",
     "test": "vitest run",
     "build": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json",
-    "package": "electron-builder"
+    "package": "electron-builder",
+    "abi:node": "cd node_modules/better-sqlite3 && node ../prebuild-install/bin.js -r node",
+    "abi:electron": "cd node_modules/better-sqlite3 && node ../prebuild-install/bin.js -r electron -t 33.4.11"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

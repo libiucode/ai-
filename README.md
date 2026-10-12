@@ -16,14 +16,23 @@
 3. 安装完成后从开始菜单启动「AI盯播工具」。
 4. 卸载：Windows「设置 → 应用」中卸载。卸载**不会**删除用户数据（数据库、报告），如需彻底清除，手动删除 `%APPDATA%/ai-live-monitor/` 目录。
 
+## Windows 打包注意事项（winCodeSign 符号链接权限）
+
+`npm run package` 首次执行时，electron-builder 会下载并解压 winCodeSign 工具包。在未开启 Windows 开发者模式的系统上，解压其中的符号链接文件会报 `EPERM`。规避办法（任选一）：
+
+1. 开启 Windows「设置 → 系统 → 开发者选项 → 开发人员模式」，之后重试 `npm run package`（一劳永逸）；
+2. 或手动解压：用 7-Zip 把 `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\<版本>.7z` 解压到同名目录，解压时排除 darwin 相关的符号链接文件，再重试打包。
+
+本机开发环境已完成上述处理，打包可直接通过；换新机器或 CI 需要重新执行一次。
+
 ## 开发环境启动步骤
 
 ```bash
-npm install          # Node 20+，Windows 建议用 npm.cmd
-npm run dev          # 构建 renderer + main 并启动 Electron
-npm test             # vitest 全部测试（44 个）
+npm install          # 建议 Node 22 LTS 或更高版本；Windows 建议用 npm.cmd
+npm test             # vitest 全部测试（46 个）；pretest 自动处理 better-sqlite3 ABI
 npm run typecheck    # tsc 双 tsconfig 校验
 npm run build        # 产出 dist/renderer + dist/main
+npm run dev          # 构建 renderer + main 并启动 Electron
 npm run package      # electron-builder 打包 Windows 安装包
 ```
 
@@ -31,17 +40,19 @@ npm run package      # electron-builder 打包 Windows 安装包
 
 better-sqlite3 的二进制只能对应一个运行时：
 - 跑 `npm test` 需要 **Node ABI** 版本
-- Electron 运行/打包需要 **Electron ABI 130** 版本
+- Electron 运行/打包需要 **Electron ABI** 版本
 
-切换命令（在 `node_modules/better-sqlite3` 目录下）：
+`npm test` 已内置 pretest 守卫（`scripts/ensure-sqlite-abi.js`）：跑测试前自动检测当前 Node 与二进制 ABI 是否匹配，不匹配则自动重建，**通常无需手动操作**。守卫还会顺带清理 `build/Release/.forge-meta`（@electron/rebuild 的重建记录）——留着过期的记录会让下次 `npm run package` 误判"已重建过"而跳过，把 Node ABI 的二进制打进安装包，应用一启动就崩。自动重建失败（无网络等）时，用手动切换命令：
 
 ```bash
 # 切到 Electron（跑应用/打包前）
-node ../prebuild-install/bin.js -r electron -t 33.4.11
+npm run abi:electron
 
 # 切回 Node（跑测试前）
-node ../prebuild-install/bin.js -r node
+npm run abi:node
 ```
+
+`abi:electron` 中的版本号（当前 33.4.11）需与 `node_modules/electron` 实际版本保持一致，升级 Electron 后同步修改 `package.json` 中该脚本。
 
 ## 腾讯云 ASR 开通和配置位置
 
@@ -145,6 +156,6 @@ node ../prebuild-install/bin.js -r node
 
 ## 测试说明
 
-- 单元测试 44 个：`npm test`（vitest）。
+- 单元测试 46 个：`npm test`（vitest）。
 - fixture 目录 `fixtures/` 覆盖：ASR 临时/稳态分离、断线重连、LLM 正常/超时/坏 JSON/伪造证据、话术框架样例。
 - 所有 fixture 测试标注「模拟数据」；fixture 通过**不代表**真实 ASR/LLM 已验收。
