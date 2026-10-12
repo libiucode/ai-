@@ -20,6 +20,7 @@ export interface CaptureStartResult {
 export type CaptureStartError =
   | { code: "PERMISSION_DENIED"; message: string }
   | { code: "NO_DEVICE"; message: string }
+  | { code: "NOT_SUPPORTED"; message: string }
   | { code: "START_FAILED"; message: string };
 
 export async function startMicCapture(
@@ -68,6 +69,21 @@ export async function startLoopbackCapture(
     const e = err as DOMException;
     if (e.name === "NotAllowedError") {
       return { ok: false, error: { code: "PERMISSION_DENIED", message: "屏幕共享被取消。系统声音采集需要选择一个共享目标并勾选“分享音频”。" } };
+    }
+    if (e.name === "NotSupportedError") {
+      // 实测：某些环境（如 Windows 11 预览版、显示采集能力被系统策略/驱动禁用时）
+      // getDisplayMedia 会直接抛 NotSupportedError，与应用无关。给出可操作的提示，
+      // 而不是把 "Not supported" 原样甩给用户。
+      return {
+        ok: false,
+        error: {
+          code: "NOT_SUPPORTED",
+          message:
+            "系统声音采集不可用：当前环境不支持屏幕共享采集（NotSupportedError）。" +
+            "这通常是系统的显示采集能力缺失（系统版本/驱动/策略限制），不是应用故障。" +
+            "请改用「开始麦克风监听」，或更换一台机器验证系统声音模式。",
+        },
+      };
     }
     return { ok: false, error: { code: "START_FAILED", message: `系统声音启动失败: ${e.message}` } };
   }
