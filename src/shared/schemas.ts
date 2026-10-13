@@ -153,6 +153,7 @@ export const IpcChannels = {
   transcriptFinal: "transcript.final",
   analysisStatus: "analysis.status",
   analysisIssues: "analysis.issues",
+  scriptStatus: "script.status",
   frameworkList: "framework.list",
   frameworkSave: "framework.save",
   settingsGet: "settings.get",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Issue, ReportSummary, SessionSummary, TranscriptSegment } from "../../shared/contracts";
+import { PHASE_LABEL } from "../../shared/contracts";
 import {
   Badge,
   Button,
@@ -10,6 +11,7 @@ import {
   formatClock,
   tokens,
 } from "../ui/basics";
+import { PRIORITY_LABEL } from "./frameworkSchema";
 import { IssueCard } from "./MonitorPage";
 
 export function HistoryPage() {
@@ -201,6 +203,61 @@ function ReportView({ report }: { report: ReportSummary }) {
           <KV k="语速（总时长）" v={`${report.metrics.charsPerTotalMinute} 字/分`} />
           <KV k="最长静音" v={formatClock(report.metrics.longestSilenceMs)} />
         </div>
+      </Panel>
+
+      <Panel title="话术步骤覆盖">
+        {!report.script ? (
+          <div style={{ fontSize: 13, color: tokens.textDim }}>未配置话术框架，无步骤覆盖数据。</div>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: tokens.textDim, marginBottom: 8 }}>框架：{report.script.frameworkName}</div>
+            {report.script.phases.length === 0 ? (
+              <div style={{ fontSize: 13, color: tokens.textDim, marginBottom: 8 }}>未识别到话术阶段。</div>
+            ) : (
+              <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12, marginBottom: 12 }}>
+                <thead>
+                  <tr>
+                    {["阶段", "进入", "离开", "停留"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${tokens.border}`, padding: "4px 8px", color: tokens.textDim }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.script.phases.map((p, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: "4px 8px" }}>{PHASE_LABEL[p.phase] ?? p.phase}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatClock(p.startMs)}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatClock(p.endMs)}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatClock(p.endMs - p.startMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {["步骤", "优先级", "最长等待", "最长停留", "状态"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${tokens.border}`, padding: "4px 8px", color: tokens.textDim }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.script.steps.map((s, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: "4px 8px" }}>{s.name}</td>
+                    <td style={{ padding: "4px 8px" }}>{PRIORITY_LABEL[s.priority] ?? String(s.priority)}</td>
+                    <td style={{ padding: "4px 8px" }}>{s.maxWaitMs > 0 ? formatClock(s.maxWaitMs) : "不限时"}</td>
+                    <td style={{ padding: "4px 8px" }}>{formatClock(s.maxStayMs)}</td>
+                    <td style={{ padding: "4px 8px" }}>
+                      {s.overdue ? <Badge tone="warn">已超时</Badge> : <Badge tone="ok">正常</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </Panel>
 
       <Panel title={`问题时间轴（${report.issueTimeline.length}）`}>

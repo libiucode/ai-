@@ -118,6 +118,60 @@ export interface Framework {
   updatedAt: string;
 }
 
+/** 话术阶段状态机的阶段名（与 ruleEngine.ScriptLoopState 一致）。 */
+export type ScriptPhaseName = "idle" | "opening" | "productIntro" | "interaction" | "cta";
+
+export const PHASE_LABEL: Record<ScriptPhaseName, string> = {
+  idle: "未识别",
+  opening: "开场",
+  productIntro: "产品介绍",
+  interaction: "互动",
+  cta: "成交引导",
+};
+
+/** 单个步骤的实时状态（话术步骤覆盖面板）。 */
+export interface ScriptStepStatus {
+  id: string;
+  name: string;
+  priority: number;
+  maxWaitMs: number;
+  /** 当前阶段停留时间已超过该步骤的最长等待时间 */
+  overdue: boolean;
+}
+
+/** 会话进行中推送给渲染层的话术阶段状态。 */
+export interface ScriptStatus {
+  phase: ScriptPhaseName;
+  /** 当前阶段已停留时长（会话相对毫秒；idle 时为 0） */
+  phaseElapsedMs: number;
+  steps: ScriptStepStatus[];
+  frameworkName: string | null;
+}
+
+/** 报告用：重放转写得到的一个阶段区间。 */
+export interface ScriptPhaseInterval {
+  phase: ScriptPhaseName;
+  startMs: number;
+  endMs: number;
+}
+
+/** 报告用：单步骤覆盖统计。 */
+export interface ScriptStepReport {
+  name: string;
+  priority: number;
+  maxWaitMs: number;
+  /** 所有已识别阶段中最长的一次停留 */
+  maxStayMs: number;
+  overdue: boolean;
+}
+
+/** 报告用：话术步骤覆盖汇总。未配置话术框架时为 null。 */
+export interface ScriptReport {
+  frameworkName: string;
+  phases: ScriptPhaseInterval[];
+  steps: ScriptStepReport[];
+}
+
 export interface AudioStatus {
   state: "idle" | "capturing" | "paused" | "error";
   source: "microphone" | "systemLoopback" | null;
@@ -243,6 +297,8 @@ export interface ReportSummary {
     success: number;
     failed: number;
   };
+  /** 话术步骤覆盖（未配置话术框架时为 null） */
+  script: ScriptReport | null;
   generatedAtIso: string;
 }
 

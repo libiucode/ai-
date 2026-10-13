@@ -1,6 +1,8 @@
 import { Store } from "../storage/store";
 import { computeMetrics } from "../analysis/metrics";
-import type { Issue, ReportSummary } from "../../shared/contracts";
+import { computeStepCoverage, replayScriptPhases } from "../analysis/ruleEngine";
+import type { Issue, ReportSummary, ScriptReport } from "../../shared/contracts";
+import { PHASE_LABEL } from "../../shared/contracts";
 
 function rowToIssue(r: Record<string, unknown>): Issue {
   return {
@@ -78,6 +80,25 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
     : Date.now();
   const listenedMs = Math.max(0, endedAt - startedAt);
 
+  // 话术步骤覆盖：重放稳态转写还原阶段区间（与实时会话同一台状态机，确定性一致）；
+  // 未配置话术框架时为 null，不虚构数据。
+  let script: ScriptReport | null = null;
+  const framework = store.listFrameworks()[0] ?? null;
+  if (framework) {
+    const phases = replayScriptPhases(segments);
+    script = {
+      frameworkName: framework.name,
+      phases: phases.map((p) => ({ phase: p.phase, startMs: p.startMs, endMs: p.endMs })),
+      steps: computeStepCoverage(framework, phases).map((c) => ({
+        name: c.step.name,
+        priority: c.step.priority,
+        maxWaitMs: c.step.maxWaitMs,
+        maxStayMs: c.maxStayMs,
+        overdue: c.overdue,
+      })),
+    };
+  }
+
   return {
     session: {
       id: session.id,
@@ -114,6 +135,7 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       estimatedTokens: estimateTokens(metrics.chineseChars, metrics.englishWords),
     },
     analysisRuns: runStats,
+    script,
     generatedAtIso: new Date().toISOString(),
   };
 }
@@ -150,6 +172,53 @@ export const TYPE_LABEL: Record<string, string> = {
   frameworkStep: "话术步骤缺失",
   other: "其他",
 };
+
+const PRIORITY_LABEL: Record<number, string> = {
+  0: "可选",
+  1: "建议",
+  2: "必须",
+};
+
+/** 话术步骤覆盖章节（未配置框架时给出说明，不虚构数据）。 */
+function scriptSection(report: ReportSummary): string {
+  if (!report.script) {
+    return `<h2>话术步骤覆盖</h2>\n<p class="kv">未配置话术框架，无步骤覆盖数据。</p>`;
+  }
+  const s = report.script;
+  const phaseRows = s.phases.length
+    ? s.phases
+        .map(
+          (p) => `<tr>
+  <td>${esc(PHASE_LABEL[p.phase] ?? p.phase)}</td>
+  <td>${formatMs(p.startMs)}</td>
+  <td>${formatMs(p.endMs)}</td>
+  <td>${formatMs(p.endMs - p.startMs)}</td>
+</tr>`,
+        )
+        .join("\n")
+    : '<tr><td colspan="4">未识别到话术阶段</td></tr>';
+  const stepRows = s.steps
+    .map(
+      (st) => `<tr>
+  <td>${esc(st.name)}</td>
+  <td>${PRIORITY_LABEL[st.priority] ?? st.priority}</td>
+  <td>${st.maxWaitMs > 0 ? formatMs(st.maxWaitMs) : "不限时"}</td>
+  <td>${formatMs(st.maxStayMs)}</td>
+  <td class="${st.overdue ? "sev-warning" : ""}">${st.overdue ? "已超时" : "正常"}</td>
+</tr>`,
+    )
+    .join("\n");
+  return `<h2>话术步骤覆盖</h2>
+<p class="kv">框架：${esc(s.frameworkName)}</p>
+<table>
+<thead><tr><th>阶段</th><th>进入</th><th>离开</th><th>停留</th></tr></thead>
+<tbody>${phaseRows}</tbody>
+</table>
+<table>
+<thead><tr><th>步骤</th><th>优先级</th><th>最长等待</th><th>最长停留</th><th>状态</th></tr></thead>
+<tbody>${stepRows || '<tr><td colspan="5">无步骤</td></tr>'}</tbody>
+</table>`;
+}
 
 /** Renders the HTML report from real report data. */
 export function buildHtmlReport(report: ReportSummary): string {
@@ -213,6 +282,8 @@ LLM 请求 ${report.llm.requestCount} 次（失败 ${report.llm.failedCount}）�
 <tr><th>最长静音</th><td>${formatMs(report.metrics.longestSilenceMs)}</td><th></th><td></td></tr>
 </tbody>
 </table>
+
+${scriptSection(report)}
 
 <h2>问题分类</h2>
 <table>

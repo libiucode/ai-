@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Issue, TranscriptSegment } from "../../shared/contracts";
+import { PHASE_LABEL } from "../../shared/contracts";
 import {
   Badge,
   Button,
@@ -13,6 +14,7 @@ import {
   inputStyle,
   tokens,
 } from "../ui/basics";
+import { PRIORITY_LABEL } from "./frameworkSchema";
 import { useMonitorState } from "../hooks/useMonitorState";
 import { startLoopbackCapture, startMicCapture, type CaptureHandle } from "../capture/audioCapture";
 
@@ -92,6 +94,8 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   const asr = mon.asr;
   const lastFinalAgo = mon.lastFinalAt ? now - mon.lastFinalAt : null;
   const analysisCountdownSec = active ? 0 : 0; // scheduler boundary not exposed; show last status instead
+  const scriptStatus = mon.script;
+  const overdueStepNames = scriptStatus?.steps.filter((s) => s.overdue).map((s) => s.name) ?? [];
 
   const stateTone = {
     idle: "dim",
@@ -237,6 +241,56 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
           <Metric label="分析倒计时" value={analysisCountdownSec ? `${analysisCountdownSec}s` : "按间隔触发"} />
         </Panel>
       </div>
+
+      {/* ---- 话术步骤覆盖 ---- */}
+      <Panel title="话术步骤覆盖">
+        {!scriptStatus || scriptStatus.steps.length === 0 ? (
+          <div style={{ color: tokens.textDim, fontSize: 13 }}>
+            尚未开始监听，或未配置话术步骤。开始监听后，这里会实时显示当前话术阶段、停留时长与步骤超时提醒（步骤在「话术配置」中维护）。
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+              <Badge tone={scriptStatus.phase === "idle" ? "dim" : "info"}>
+                {PHASE_LABEL[scriptStatus.phase] ?? scriptStatus.phase}
+              </Badge>
+              <span style={{ fontSize: 13, color: tokens.textDim }}>
+                {scriptStatus.phase === "idle"
+                  ? "尚未识别到话术阶段（开场白、产品介绍、成交引导等关键词会触发阶段跟踪）"
+                  : `本阶段已停留 ${formatClock(scriptStatus.phaseElapsedMs)}`}
+              </span>
+              {scriptStatus.frameworkName ? (
+                <span style={{ marginLeft: "auto", fontSize: 12, color: tokens.textDim }}>框架：{scriptStatus.frameworkName}</span>
+              ) : null}
+            </div>
+            {overdueStepNames.length > 0 ? (
+              <div style={{ marginBottom: 8, padding: "6px 10px", background: tokens.warnSoft, borderRadius: 6, fontSize: 13, color: tokens.warn }}>
+                ⚠ 步骤{overdueStepNames.map((n) => `「${n}」`).join("、")}已超过最长等待时间，可能漏讲或卡住。
+              </div>
+            ) : null}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {scriptStatus.steps.map((s) => (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  <span style={{ color: tokens.text, width: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <Badge tone="dim">{PRIORITY_LABEL[s.priority] ?? "建议"}</Badge>
+                  <span style={{ color: tokens.textDim, fontSize: 12 }}>
+                    {s.maxWaitMs > 0 ? `${Math.round(s.maxWaitMs / 1000)}s 内需完成` : "不限时"}
+                  </span>
+                  <span style={{ marginLeft: "auto" }}>
+                    {s.overdue ? (
+                      <Badge tone="warn">已超时</Badge>
+                    ) : scriptStatus.phase === "idle" ? (
+                      <Badge tone="dim">未开始</Badge>
+                    ) : (
+                      <Badge tone="ok">正常</Badge>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Panel>
 
       {/* ---- 问题区 ---- */}
       <Panel title={`问题提醒（本次会话 ${mon.issues.length} 条）`}>

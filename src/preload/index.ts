@@ -26,6 +26,7 @@ const EVENT_CHANNELS: Record<keyof AppEvents, string> = {
   "asr.status": IpcChannels.asrStatus,
   "analysis.status": IpcChannels.analysisStatus,
   "analysis.issues": IpcChannels.analysisIssues,
+  "script.status": IpcChannels.scriptStatus,
   "app.error": IpcChannels.appError,
 };
 

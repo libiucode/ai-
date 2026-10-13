@@ -4,6 +4,7 @@ import type {
   AsrStatus,
   AudioStatus,
   Issue,
+  ScriptStatus,
   TranscriptSegment,
 } from "../../shared/contracts";
 import type { AnalysisStatusLike, RendererAppApi } from "../../shared/api";
@@ -42,6 +43,7 @@ export function useMonitorState() {
   const [audio, setAudio] = useState<AudioStatus | null>(null);
   const [asr, setAsr] = useState<AsrStatus | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisStatusLike | null>(null);
+  const [script, setScript] = useState<ScriptStatus | null>(null);
   const [partials, setPartials] = useState<Array<{ key: string; text: string }>>([]);
   const [finals, setFinals] = useState<TranscriptSegment[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -94,6 +96,9 @@ export function useMonitorState() {
       window.appApi.subscribeEvents("analysis.issues", (arr) => {
         setIssues((prev) => [...arr, ...prev].slice(0, 100));
       }),
+      window.appApi.subscribeEvents("script.status", (st) => {
+        setScript(st);
+      }),
       window.appApi.subscribeEvents("app.error", (err) => {
         setErrors((prev) => [err, ...prev].slice(0, 20));
       }),
@@ -108,6 +113,7 @@ export function useMonitorState() {
       setPartials([]);
       setIssues([]);
       setErrors([]);
+      setScript(null);
       setHasTranscriptGap(false);
       setLastFinalAt(null);
       try {
@@ -156,6 +162,7 @@ export function useMonitorState() {
     audio,
     asr,
     analysis,
+    script,
     partials: trimmedPartials,
     finals,
     issues,

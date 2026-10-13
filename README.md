@@ -29,7 +29,7 @@
 
 ```bash
 npm install          # 建议 Node 22 LTS 或更高版本；Windows 建议用 npm.cmd
-npm test             # vitest 全部测试（46 个）；pretest 自动处理 better-sqlite3 ABI
+npm test             # vitest 全部测试（62 个）；pretest 自动处理 better-sqlite3 ABI
 npm run typecheck    # tsc 双 tsconfig 校验
 npm run build        # 产出 dist/renderer + dist/main
 npm run smoke        # 真实 Electron 渲染层冒烟：验证预加载生效、React 挂载、无 console 错误（防白屏）
@@ -142,14 +142,13 @@ npm run abi:node
 2. **LLM 修复重试在预算计数上偏保守**：一次分析最多计 2 次请求。
 3. **ASR 音频时长映射用启发式**：按 `audio_duration` 回推片段起止时间，真实联调时可能需要按腾讯返回字段校准。
 4. **分析倒计时未精确显示**：UI 显示最近分析状态，精确到秒的倒计时需要主进程暴露调度器边界（第二阶段）。
-5. **话术步骤覆盖检测未接入报告**：ScriptLoopState 已实现，但步骤覆盖状态未进报告页。
+5. **话术步骤与阶段的映射是关键词触发**：阶段靠转写中的关键词（开场/产品介绍/成交等）识别，漏说关键词的阶段不会出现在覆盖统计里。
 
 第二阶段规划：
 1. 真实密钥端到端验收（麦克风 10 分钟 + 系统声音 10 分钟 + 断网恢复）。
-2. 话术步骤覆盖状态进报告与实时提醒（步骤超时提醒）。
-3. 精确分析倒计时与窗口进度条。
-4. 多话术框架管理与切换。
-5. macOS 打包与验证。
+2. 精确分析倒计时与窗口进度条。
+3. 多话术框架管理与切换。
+4. macOS 打包与验证。
 
 ## 演示脚本
 
@@ -157,6 +156,7 @@ npm run abi:node
 
 ## 测试说明
 
-- 单元测试 46 个：`npm test`（vitest）。
+- 单元测试 62 个：`npm test`（vitest）。
 - fixture 目录 `fixtures/` 覆盖：ASR 临时/稳态分离、断线重连、LLM 正常/超时/坏 JSON/伪造证据、话术框架样例。
 - 所有 fixture 测试标注「模拟数据」；fixture 通过**不代表**真实 ASR/LLM 已验收。
+- 话术步骤覆盖：实时面板经 `script.status` 事件秒级刷新（阶段/停留/超时），报告侧由 `replayScriptPhases` 重放稳态转写还原（与实时同一台状态机），测试见 `tests/scriptCoverage.test.ts`。

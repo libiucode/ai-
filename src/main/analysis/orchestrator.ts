@@ -12,7 +12,9 @@ import type {
   AppError,
   AsrStatus,
   AudioStatus,
+  Framework,
   Issue,
+  ScriptStatus,
 } from "../../shared/contracts";
 import type { Settings, StartSessionConfig } from "../../shared/schemas";
 import { makeError } from "../security/errorFactory";
@@ -27,6 +29,8 @@ export class SessionOrchestrator {
   private llm = new LlmClient();
   private scheduler: WindowScheduler | null = null;
   private scriptState = new ScriptLoopState();
+  /** 会话使用的话术框架（启动时缓存，每个分析窗口刷新，保存后下一窗生效） */
+  private framework: Framework | null = null;
   private slicer = new PcmResamplerSlicer();
   private tickTimer: NodeJS.Timeout | null = null;
   private pendingPackets: AudioPacket[] = [];
@@ -99,6 +103,7 @@ export class SessionOrchestrator {
     this.finalCount = 0;
     this.previousSummary = "";
     this.scriptState.reset(0);
+    this.framework = this.store.listFrameworks()[0] ?? null;
     this.slicer = new PcmResamplerSlicer();
     this.pendingPackets = [];
 
@@ -166,8 +171,14 @@ export class SessionOrchestrator {
     this.emit("capture.status", this.audioStatus);
 
     this.tickTimer = setInterval(() => {
-      if (this.status === "active") this.scheduler?.tick(this.nowMs());
+      if (this.status === "active") {
+        this.scheduler?.tick(this.nowMs());
+        // 话术步骤面板需要秒级刷新：阶段停留时长与超时状态
+        this.emitScriptStatus();
+      }
     }, 1000);
+
+    this.emitScriptStatus();
 
     return { sessionId, error: null };
   }
@@ -264,7 +275,8 @@ export class SessionOrchestrator {
     });
     const newPhase = this.scriptState.feed(seg.text, seg.endMs);
     if (newPhase) {
-      this.emit("analysis.status", this.analysisStatusSnapshot(`phase:${newPhase}`));
+      // 阶段切换：推送结构化 script.status（替代以前塞进 analysis.status 的 phase:xxx 文本）
+      this.emitScriptStatus();
     }
     this.emit("transcript.final", seg);
   }
@@ -276,6 +288,24 @@ export class SessionOrchestrator {
       lastRunId: null,
       lastRunStatus: note ?? null,
     };
+  }
+
+  /** 推送话术阶段状态：阶段切换即时发，活跃期每秒随 tick 发（刷新停留时长与超时）。 */
+  private emitScriptStatus() {
+    const overdueNames = new Set(this.scriptState.overdueSteps(this.framework, this.nowMs()));
+    const payload: ScriptStatus = {
+      phase: this.scriptState.current,
+      phaseElapsedMs: this.scriptState.elapsedMs(this.nowMs()),
+      frameworkName: this.framework?.name ?? null,
+      steps: (this.framework?.steps ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        priority: s.priority,
+        maxWaitMs: s.maxWaitMs,
+        overdue: overdueNames.has(s.name),
+      })),
+    };
+    this.emit("script.status", payload);
   }
 
   private async runAnalysis(startMs: number, endMs: number) {
@@ -303,6 +333,7 @@ export class SessionOrchestrator {
 
       const frameworkList = this.store.listFrameworks();
       const framework = frameworkList[0] ?? null;
+      this.framework = framework;
       const issues: Issue[] = [];
       for (const seg of segments) {
         const hits = matchRules(seg.text, {

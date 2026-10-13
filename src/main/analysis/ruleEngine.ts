@@ -1,4 +1,7 @@
-import type { Framework, FrameworkRule } from "../../shared/contracts";
+import type { Framework, FrameworkRule, FrameworkStep, ScriptPhaseName } from "../../shared/contracts";
+
+/** 阶段名复用 shared contracts，避免两处定义漂移。 */
+export type ScriptPhase = ScriptPhaseName;
 
 export interface RuleHit {
   ruleId: string;
@@ -80,12 +83,6 @@ export function matchRules(
  * Script-loop state machine. Only advances on explicit triggers:
  * new opening, product switch, CTA, or manual reset — never just on time.
  */
-export type ScriptPhase =
-  | "idle"
-  | "opening"
-  | "productIntro"
-  | "interaction"
-  | "cta";
 
 const PHASE_TRIGGERS: Array<{ phase: ScriptPhase; re: RegExp }> = [
   { phase: "opening", re: /开场|新来的|欢迎.*来到|开始直播/ },
@@ -101,8 +98,9 @@ export class ScriptLoopState {
     return this.phase;
   }
 
-  get phaseElapsedMs(): number {
-    return this.phaseEnteredMs;
+  /** 当前阶段已停留时长；尚未识别到阶段（idle）时返回 0，不把会话总时长当成阶段时长。 */
+  elapsedMs(nowMs: number): number {
+    return this.phase === "idle" ? 0 : nowMs - this.phaseEnteredMs;
   }
 
   /** Feed final text with its session-relative time; returns new phase if changed. */
@@ -133,4 +131,52 @@ export class ScriptLoopState {
       .filter((s) => s.maxWaitMs > 0 && elapsed > s.maxWaitMs)
       .map((s) => s.name);
   }
+}
+
+/** 报告侧重放：按顺序回放稳态转写，得到阶段区间（与实时会话同一台状态机，结果确定一致）。 */
+export interface ReplayedPhase {
+  phase: ScriptPhase;
+  startMs: number;
+  endMs: number;
+}
+
+export function replayScriptPhases(
+  segments: Array<{ text: string; endMs: number }>,
+): ReplayedPhase[] {
+  const state = new ScriptLoopState();
+  const phases: ReplayedPhase[] = [];
+  let lastEndMs = 0;
+  for (const seg of segments) {
+    lastEndMs = Math.max(lastEndMs, seg.endMs);
+    const next = state.feed(seg.text, seg.endMs);
+    if (next) {
+      // feed 只在阶段变化时返回新阶段；上一区间在此闭合
+      if (phases.length) phases[phases.length - 1].endMs = seg.endMs;
+      phases.push({ phase: next, startMs: seg.endMs, endMs: seg.endMs });
+    }
+  }
+  // 最后一个阶段持续到最后一条转写
+  if (phases.length) {
+    phases[phases.length - 1].endMs = Math.max(phases[phases.length - 1].endMs, lastEndMs);
+  }
+  return phases;
+}
+
+export interface StepCoverage {
+  step: FrameworkStep;
+  /** 所有已识别阶段中最长的一次停留 */
+  maxStayMs: number;
+  overdue: boolean;
+}
+
+/** 单步骤覆盖统计。超时规则与实时面板一致：最长停留 > maxWaitMs 即超时（maxWaitMs=0 表示不限时）。 */
+export function computeStepCoverage(
+  framework: Framework,
+  phases: ReplayedPhase[],
+): StepCoverage[] {
+  return framework.steps.map((step) => {
+    const maxStayMs = phases.reduce((max, p) => Math.max(max, p.endMs - p.startMs), 0);
+    const overdue = step.maxWaitMs > 0 && maxStayMs > step.maxWaitMs;
+    return { step, maxStayMs, overdue };
+  });
 }

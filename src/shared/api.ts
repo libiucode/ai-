@@ -10,6 +10,7 @@ import type {
   Settings,
   Session,
   SessionSummary,
+  ScriptStatus,
   StartSessionConfig,
   TranscriptSegment,
 } from "./contracts";
@@ -50,6 +51,7 @@ export interface AppEvents {
   "asr.status": AsrStatus;
   "analysis.status": AnalysisStatusLike;
   "analysis.issues": Issue[];
+  "script.status": ScriptStatus;
   "app.error": AppError;
 }
 
