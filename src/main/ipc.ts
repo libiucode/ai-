@@ -9,7 +9,10 @@ import {
   AsrConfigSchema,
   LlmConfigSchema,
   IpcChannels,
+  type AsrConfig,
+  type LlmConfig,
 } from "../shared/schemas";
+import type { Settings } from "../shared/contracts";
 import { TencentAsrAdapter } from "./asr/tencentAdapter";
 import { buildReportSummary, buildHtmlReport } from "./report/reportBuilder";
 import fs from "node:fs";
@@ -17,6 +20,41 @@ import path from "node:path";
 
 /** Session-scoped test adapter so connect tests never touch the live orchestrator ASR. */
 let testAsr: TencentAsrAdapter | null = null;
+
+/**
+ * 读取库里已保存的 ASR 配置（「测试连接」的 useStored 路径用）。
+ * 渲染层永远看不到明文：只有主进程从 settings 表读 asr_config。
+ */
+export function readStoredAsrConfig(store: Store): AsrConfig | null {
+  const raw = store.getSetting("asr_config");
+  if (!raw) return null;
+  try {
+    const parsed = AsrConfigSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 读取库里已保存的 LLM 配置（api_key 独立存放，此处回接）。 */
+export function readStoredLlmConfig(store: Store): LlmConfig | null {
+  const settingsRaw = store.getSetting("app_settings");
+  const apiKey = store.getSetting("llm_api_key");
+  if (!settingsRaw || !apiKey) return null;
+  try {
+    const settings = JSON.parse(settingsRaw) as Settings;
+    if (!settings.llm?.base_url || !settings.llm?.model) return null;
+    const parsed = LlmConfigSchema.safeParse({ ...settings.llm, api_key: apiKey });
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 连接测试请求是否标记为“使用已保存配置”（界面字段留空但已配置过时）。 */
+function wantsStoredConfig(raw: unknown): boolean {
+  return typeof raw === "object" && raw !== null && (raw as { useStored?: unknown }).useStored === true;
+}
 
 /**
  * Redacts anything resembling a key/signature from provider error text before
@@ -34,12 +72,18 @@ function safeError(err: unknown, fallbackCode: string): {
   message: string;
   retryable: boolean;
 } {
-  const raw = err instanceof Error ? err.message : "unknown error";
-  return {
-    code: fallbackCode,
-    message: redactSecrets(raw),
-    retryable: false,
-  };
+  // 注意：makeError 产出的是普通对象不是 Error 实例（probe 的服务端裁决错误就是它），
+  // 只认 instanceof Error 会把“鉴权失败”压成“unknown error”。
+  let raw = "unknown error";
+  if (err instanceof Error) raw = err.message;
+  else if (typeof err === "object" && err !== null && typeof (err as { message?: unknown }).message === "string") {
+    raw = (err as { message: string }).message;
+  }
+  const code =
+    typeof err === "object" && err !== null && typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : fallbackCode;
+  return { code, message: redactSecrets(raw), retryable: false };
 }
 
 export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
@@ -207,44 +251,69 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
   // ---- connection tests (session-scoped, never touch the live session) ----
 
   ipcMain.handle(IpcChannels.asrTestConnection, async (_e, rawConfig: unknown) => {
-    const parsed = AsrConfigSchema.safeParse(rawConfig);
-    if (!parsed.success) {
-      return { ok: false, error: { code: "ASR_CONFIG_INVALID", message: "ASR 配置不完整：需要 App ID、Secret ID、Secret Key", retryable: false } };
+    // 两种调用：带完整字段直接测；useStored 测库里已存配置（渲染层始终不落明文）
+    let config: AsrConfig;
+    if (wantsStoredConfig(rawConfig)) {
+      const stored = readStoredAsrConfig(store);
+      if (!stored) {
+        return { ok: false, error: { code: "ASR_NOT_CONFIGURED", message: "尚未保存 ASR 配置，请先填写三项并保存", retryable: false } };
+      }
+      config = stored;
+    } else {
+      const parsed = AsrConfigSchema.safeParse(rawConfig);
+      if (!parsed.success) {
+        return { ok: false, error: { code: "ASR_CONFIG_INVALID", message: "ASR 配置不完整：需要 App ID、Secret ID、Secret Key", retryable: false } };
+      }
+      config = parsed.data;
     }
     if (testAsr) {
       try { await testAsr.stop(); } catch { /* best effort */ }
     }
-    testAsr = new TencentAsrAdapter();
+    const adapter = new TencentAsrAdapter();
+    testAsr = adapter;
+    // probe 内部 open 后有 1.5s 服务端裁决窗口；外层 12s 兜底防挂起
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("连接测试超时")), 12000),
+    );
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("连接测试超时")), 10000),
-      );
-      await Promise.race([testAsr.connect(parsed.data), timeout]);
-      await testAsr.stop();
-      return { ok: true, error: null };
+      const result = await Promise.race([adapter.probe(config), timeout]);
+      return result.ok
+        ? { ok: true, error: null }
+        : { ok: false, error: safeError(result.error, "ASR_CONNECT_FAILED") };
     } catch (err) {
-      try { await testAsr.stop(); } catch { /* best effort */ }
-      testAsr = null;
       return { ok: false, error: safeError(err, "ASR_CONNECT_FAILED") };
+    } finally {
+      try { await adapter.stop(); } catch { /* best effort */ }
+      testAsr = null;
     }
   });
 
   ipcMain.handle(IpcChannels.llmTestConnection, async (_e, rawConfig: unknown) => {
-    const parsed = LlmConfigSchema.safeParse(rawConfig);
-    if (!parsed.success) {
-      return { ok: false, error: { code: "LLM_CONFIG_INVALID", message: "LLM 配置不完整：需要 Base URL、模型名、API Key", retryable: false } };
+    let config: LlmConfig;
+    if (wantsStoredConfig(rawConfig)) {
+      const stored = readStoredLlmConfig(store);
+      if (!stored) {
+        return { ok: false, error: { code: "LLM_NOT_CONFIGURED", message: "尚未保存 LLM 配置，请先填写并保存", retryable: false } };
+      }
+      config = stored;
+    } else {
+      const parsed = LlmConfigSchema.safeParse(rawConfig);
+      if (!parsed.success) {
+        return { ok: false, error: { code: "LLM_CONFIG_INVALID", message: "LLM 配置不完整：需要 Base URL、模型名、API Key", retryable: false } };
+      }
+      config = parsed.data;
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch(`${parsed.data.base_url.replace(/\/$/, "")}/chat/completions`, {
+      const res = await fetch(`${config.base_url.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${parsed.data.api_key}`,
+          Authorization: `Bearer ${config.api_key}`,
         },
         body: JSON.stringify({
-          model: parsed.data.model,
+          model: config.model,
           messages: [{ role: "user", content: "回复 OK 两个字" }],
           max_tokens: 8,
         }),

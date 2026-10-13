@@ -9,6 +9,7 @@ import type {
   Unsubscribe,
 } from "./types";
 import { AsrConfigSchema, type AsrConfig } from "../../shared/schemas";
+import type { AppError } from "../../shared/contracts";
 import { makeError } from "../security/errorFactory";
 import { buildTencentAsrUrl } from "./tencentSign";
 import crypto from "node:crypto";
@@ -99,6 +100,36 @@ export class TencentAsrAdapter implements AsrAdapter {
     this.shouldRun = true;
     this.reconnectAttempt = 0;
     await this.openNewConnection();
+  }
+
+  /**
+   * 连接探测（「测试连接」专用）。与 connect 的关键区别：WebSocket open 之后不立即
+   * 宣布成功——实测服务端鉴权失败是在 open 之后以错误帧到达的（假密钥下 open 后
+   * 约 2ms 收到 code 4002「鉴权失败」，随后关闭）。只等 open 会把错误密钥误报为
+   * “连接成功”。open 后进入 settleMs 裁决窗口：窗口内出现服务端错误帧或关闭即失败，
+   * 静默则视为通过。探测期间禁止重连（服务端关闭就是结论）。
+   */
+  async probe(config: AsrConfig, settleMs = 1500): Promise<{ ok: boolean; error: AppError | null }> {
+    let verdict: AppError | null = null;
+    const offError = this.on("error", (p) => {
+      if (!verdict) verdict = (p as { error: AppError }).error;
+    });
+    const offStatus = this.on("status", (s) => {
+      if ((s as { state?: string }).state === "closed" && !verdict) {
+        verdict = makeError("ASR_WS_CLOSED", "连接已被服务端关闭（鉴权失败或服务不可用）", true);
+      }
+    });
+    try {
+      await this.connect(config);
+      this.shouldRun = false; // 探测不等重连；关闭即最终结论
+      await new Promise((r) => setTimeout(r, settleMs));
+      return verdict ? { ok: false, error: verdict } : { ok: true, error: null };
+    } catch (err) {
+      return { ok: false, error: err as AppError };
+    } finally {
+      offError();
+      offStatus();
+    }
   }
 
   private emit(event: AsrEvent, payload: unknown) {

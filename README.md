@@ -156,7 +156,7 @@ npm run abi:node
 
 ## 测试说明
 
-- 单元测试 62 个：`npm test`（vitest）。
+- 单元测试 70 个：`npm test`（vitest）。
 - fixture 目录 `fixtures/` 覆盖：ASR 临时/稳态分离、断线重连、LLM 正常/超时/坏 JSON/伪造证据、话术框架样例。
 - 所有 fixture 测试标注「模拟数据」；fixture 通过**不代表**真实 ASR/LLM 已验收。
 - 话术步骤覆盖：实时面板经 `script.status` 事件秒级刷新（阶段/停留/超时），报告侧由 `replayScriptPhases` 重放稳态转写还原（与实时同一台状态机），测试见 `tests/scriptCoverage.test.ts`。
