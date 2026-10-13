@@ -11,7 +11,6 @@ import {
   SEVERITY_TONE,
   TYPE_LABEL,
   formatClock,
-  inputStyle,
   tokens,
 } from "../ui/basics";
 import { PRIORITY_LABEL } from "./frameworkSchema";
@@ -121,29 +120,23 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="stack">
       {/* ---- 顶部状态区 ---- */}
-      <Panel>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <Badge tone={stateTone[mon.sessionState]}>{STATE_LABEL[mon.sessionState]}</Badge>
-          <div style={{ fontSize: 13, color: tokens.text }}>
-            会话：{mon.sessionId ? mon.sessionId.slice(0, 8) : "—"}
-            {mon.sessionStartedAt ? ` · 开始 ${new Date(mon.sessionStartedAt).toLocaleTimeString()}` : ""}
+      <section className="hero">
+        <div className="status-head">
+          <Badge tone={stateTone[mon.sessionState]} className="state-badge" pulse={mon.sessionState === "capturing" || mon.sessionState === "analyzing"}>
+            {STATE_LABEL[mon.sessionState]}
+          </Badge>
+          <div className="status-meta">
+            <span>会话 <b>{mon.sessionId ? mon.sessionId.slice(0, 8) : "—"}</b></span>
+            {mon.sessionStartedAt ? <span>开始于 <b>{new Date(mon.sessionStartedAt).toLocaleTimeString()}</b></span> : null}
+            <span>音源 <b>{captureRef.current?.sourceLabel ?? (audio?.source === "microphone" ? "麦克风" : audio?.source === "systemLoopback" ? "系统声音" : "—")}</b></span>
           </div>
-          <div style={{ fontSize: 13, color: tokens.textDim }}>
-            音源：{captureRef.current?.sourceLabel ?? (audio?.source === "microphone" ? "麦克风" : audio?.source === "systemLoopback" ? "系统声音" : "—")}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 13, color: tokens.textDim }}>电平</span>
-            <div style={{ width: 80, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ width: `${Math.min(100, level * 400)}%`, height: "100%", background: tokens.ok }} />
-            </div>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <div className="status-actions">
             {!active && mon.sessionState !== "paused" ? (
               <>
                 <select
-                  style={{ ...inputStyle, width: 200 }}
+                  className="input select"
                   value={deviceId ?? ""}
                   onChange={(e) => setDeviceId(e.target.value || null)}
                   disabled={active}
@@ -169,51 +162,60 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
             ) : null}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 18, marginTop: 10, flexWrap: "wrap", fontSize: 12, color: tokens.textDim }}>
-          <span>采集：{audio ? CAPTURE_STATE_LABEL[audio.state] : "未启动"}</span>
-          <span>ASR：{asr ? ASR_STATE_LABEL[asr.state] : "未连接"}{asr && asr.reconnectAttempt > 0 ? `（第 ${asr.reconnectAttempt} 次）` : ""}</span>
-          <span>最后稳态：{lastFinalAgo !== null ? `${Math.round(lastFinalAgo / 1000)} 秒前` : "—"}</span>
-          {audio && audio.queueOverflowCount > 0 ? <span style={{ color: tokens.warn }}>队列溢出 {audio.queueOverflowCount} 次</span> : null}
+
+        <div className="meter-row">
+          <span className="meter-label">电平</span>
+          <div className="meter">
+            <div className="meter-fill" style={{ width: `${Math.min(100, level * 400)}%` }} />
+          </div>
         </div>
-        {captureError ? <div style={{ marginTop: 8, color: tokens.danger, fontSize: 13 }}>{captureError}</div> : null}
+
+        <div className="status-chips">
+          <span className="chip"><span className="chip-k">采集</span>{audio ? CAPTURE_STATE_LABEL[audio.state] : "未启动"}</span>
+          <span className="chip"><span className="chip-k">ASR</span>{asr ? ASR_STATE_LABEL[asr.state] : "未连接"}{asr && asr.reconnectAttempt > 0 ? `（第 ${asr.reconnectAttempt} 次）` : ""}</span>
+          <span className="chip"><span className="chip-k">最后稳态</span>{lastFinalAgo !== null ? `${Math.round(lastFinalAgo / 1000)} 秒前` : "—"}</span>
+          {audio && audio.queueOverflowCount > 0 ? (
+            <span className="chip chip-warn"><span className="chip-k">队列溢出</span>{audio.queueOverflowCount} 次</span>
+          ) : null}
+        </div>
+
+        {captureError ? <div className="callout callout-danger">{captureError}</div> : null}
         {mon.hasTranscriptGap ? (
-          <div style={{ marginTop: 8, padding: "6px 10px", background: tokens.warnSoft, borderRadius: 6, fontSize: 13, color: tokens.warn }}>
+          <div className="callout callout-warn">
             ⚠ ASR 曾断线重连，断线期间存在转写缺口，缺口内没有字幕数据。
           </div>
         ) : null}
         {mon.errors.length > 0 ? (
-          <div style={{ marginTop: 8 }}>
+          <div className="err-line">
             {mon.errors.slice(0, 3).map((e, i) => (
-              <div key={i} style={{ fontSize: 12, color: tokens.danger }}>
-                [{e.code}] {e.message}
-              </div>
+              <div key={i}>[{e.code}] {e.message}</div>
             ))}
           </div>
         ) : null}
-      </Panel>
+      </section>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, alignItems: "start" }}>
         {/* ---- 转写区 ---- */}
         <Panel title="实时字幕">
           <div style={{ fontSize: 12, color: tokens.textDim, marginBottom: 6 }}>
             临时字幕为识别中间结果（灰色斜体），不落库；稳态字幕为已定稿内容。
           </div>
-          <div ref={transcriptRef} style={{ height: 300, overflowY: "auto", fontSize: 13, lineHeight: 1.7 }}>
+          <div ref={transcriptRef} className="transcript">
             {mon.finals.length === 0 && mon.partials.length === 0 ? (
-              <div style={{ color: tokens.textDim }}>暂无字幕。开始监听并说话后，这里会显示识别结果。</div>
+              <div className="empty">暂无字幕。开始监听并说话后，这里会显示识别结果。</div>
             ) : null}
             {mon.finals.map((seg) => (
-              <div key={seg.id} style={{ display: "flex", gap: 8 }}>
-                <span style={{ color: tokens.textDim, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{formatClock(seg.startMs)}</span>
-                <span style={{ color: tokens.text }}>{seg.text}</span>
-                <span style={{ color: tokens.textDim, fontSize: 11, flexShrink: 0 }}>稳态 #{seg.sourceSeq}</span>
+              <div key={seg.id} id={`seg-${seg.id}`} className="seg-row">
+                <span className="seg-time">{formatClock(seg.startMs)}</span>
+                <span className="seg-text">{seg.text}</span>
+                <span className="seg-seq">稳态 #{seg.sourceSeq}</span>
               </div>
             ))}
             {mon.partials.map((p) => (
-              <div key={p.key} style={{ display: "flex", gap: 8, opacity: 0.55 }}>
-                <span style={{ flexShrink: 0 }}>…</span>
-                <span style={{ fontStyle: "italic", color: tokens.textDim }}>{p.text}</span>
-                <span style={{ fontSize: 11, flexShrink: 0 }}>临时</span>
+              <div key={p.key} className="seg-row seg-partial">
+                <span className="seg-mark">…</span>
+                <span className="seg-text">{p.text}</span>
+                <span className="seg-seq">临时</span>
               </div>
             ))}
           </div>
@@ -221,31 +223,33 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
 
         {/* ---- 指标区 ---- */}
         <Panel title="指标">
-          <Metric label="监听时长" value={formatClock(sessionElapsedMs)} />
-          <Metric
-            label="有效讲话 / 静音"
-            value={
-              audio
-                ? `${Math.round((sessionElapsedMs * 0) + (mon.finals.length > 0 ? 1 : 0) * 0) || "—"}`
-                : "—"
-            }
-            hint="精确值见分析窗口与报告"
-          />
-          <Metric label="稳态片段数" value={String(mon.finals.length)} />
-          <Metric label="问题数（本次）" value={String(mon.issues.length)} />
-          <Metric
-            label="最近分析"
-            value={mon.analysis?.lastRunStatus ? String(mon.analysis.lastRunStatus) : "—"}
-            hint={mon.analysis?.queued ? "有窗口在排队" : undefined}
-          />
-          <Metric label="分析倒计时" value={analysisCountdownSec ? `${analysisCountdownSec}s` : "按间隔触发"} />
+          <div className="metrics-grid">
+            <Metric label="监听时长" value={formatClock(sessionElapsedMs)} />
+            <Metric label="稳态片段数" value={String(mon.finals.length)} />
+            <Metric label="问题数（本次）" value={String(mon.issues.length)} />
+            <Metric
+              label="最近分析"
+              value={mon.analysis?.lastRunStatus ? String(mon.analysis.lastRunStatus) : "—"}
+              hint={mon.analysis?.queued ? "有窗口在排队" : undefined}
+            />
+            <Metric
+              label="有效讲话 / 静音"
+              value={
+                audio
+                  ? `${Math.round((sessionElapsedMs * 0) + (mon.finals.length > 0 ? 1 : 0) * 0) || "—"}`
+                  : "—"
+              }
+              hint="精确值见分析窗口与报告"
+            />
+            <Metric label="分析倒计时" value={analysisCountdownSec ? `${analysisCountdownSec}s` : "按间隔触发"} />
+          </div>
         </Panel>
       </div>
 
       {/* ---- 话术步骤覆盖 ---- */}
       <Panel title="话术步骤覆盖">
         {!scriptStatus || scriptStatus.steps.length === 0 ? (
-          <div style={{ color: tokens.textDim, fontSize: 13 }}>
+          <div className="empty">
             尚未开始监听，或未配置话术步骤。开始监听后，这里会实时显示当前话术阶段、停留时长与步骤超时提醒（步骤在「话术配置」中维护）。
           </div>
         ) : (
@@ -264,19 +268,19 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
               ) : null}
             </div>
             {overdueStepNames.length > 0 ? (
-              <div style={{ marginBottom: 8, padding: "6px 10px", background: tokens.warnSoft, borderRadius: 6, fontSize: 13, color: tokens.warn }}>
+              <div className="callout callout-warn">
                 ⚠ 步骤{overdueStepNames.map((n) => `「${n}」`).join("、")}已超过最长等待时间，可能漏讲或卡住。
               </div>
             ) : null}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
               {scriptStatus.steps.map((s) => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                  <span style={{ color: tokens.text, width: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                <div key={s.id} className="step-row">
+                  <span className="step-name">{s.name}</span>
                   <Badge tone="dim">{PRIORITY_LABEL[s.priority] ?? "建议"}</Badge>
-                  <span style={{ color: tokens.textDim, fontSize: 12 }}>
+                  <span className="step-wait">
                     {s.maxWaitMs > 0 ? `${Math.round(s.maxWaitMs / 1000)}s 内需完成` : "不限时"}
                   </span>
-                  <span style={{ marginLeft: "auto" }}>
+                  <span className="step-status">
                     {s.overdue ? (
                       <Badge tone="warn">已超时</Badge>
                     ) : scriptStatus.phase === "idle" ? (
@@ -295,7 +299,7 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
       {/* ---- 问题区 ---- */}
       <Panel title={`问题提醒（本次会话 ${mon.issues.length} 条）`}>
         {mon.issues.length === 0 ? (
-          <div style={{ color: tokens.textDim, fontSize: 13 }}>暂无问题。分析窗口完成后，新问题会出现在这里。</div>
+          <div className="empty">暂无问题。分析窗口完成后，新问题会出现在这里。</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {mon.issues.map((issue) => (
@@ -303,8 +307,11 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
                 const el = document.getElementById(`seg-${segId}`);
                 if (el) {
                   el.scrollIntoView({ behavior: "smooth", block: "center" });
-                  el.style.background = tokens.accentSoft;
-                  setTimeout(() => (el.style.background = ""), 1500);
+                  el.classList.remove("seg-highlight");
+                  // force reflow so the animation can replay
+                  void el.offsetWidth;
+                  el.classList.add("seg-highlight");
+                  setTimeout(() => el.classList.remove("seg-highlight"), 1500);
                 }
               }} />
             ))}
@@ -317,11 +324,11 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
 
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${tokens.border}` }}>
-      <span style={{ fontSize: 13, color: tokens.textDim }}>{label}</span>
-      <span style={{ fontSize: 13, color: tokens.text, fontWeight: 600 }}>
+    <div className="metric">
+      <span className="metric-k">{label}</span>
+      <span className="metric-v">
         {value}
-        {hint ? <span style={{ fontWeight: 400, color: tokens.textDim, marginLeft: 6 }}>{hint}</span> : null}
+        {hint ? <span className="metric-hint">{hint}</span> : null}
       </span>
     </div>
   );
@@ -330,27 +337,25 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 export function IssueCard({ issue, onLocate }: { issue: Issue; onLocate?: (segmentId: string) => void }) {
   const tone = SEVERITY_TONE[issue.severity] ?? "dim";
   return (
-    <div style={{ border: `1px solid ${tokens.border}`, borderRadius: tokens.radius, padding: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <article className={`issue-card sev-${issue.severity}`}>
+      <div className="issue-head">
         <Badge tone={tone}>{SEVERITY_LABEL[issue.severity] ?? issue.severity}</Badge>
-        <span style={{ fontSize: 13, fontWeight: 600, color: tokens.text }}>{TYPE_LABEL[issue.type] ?? issue.type}</span>
-        <span style={{ fontSize: 12, color: tokens.textDim }}>{formatClock(issue.startMs)}</span>
+        <span className="issue-type">{TYPE_LABEL[issue.type] ?? issue.type}</span>
+        <span className="issue-time">{formatClock(issue.startMs)}</span>
         {issue.needsReview ? <Badge tone="warn">需人工核查</Badge> : null}
         {issue.occurrenceCount && issue.occurrenceCount > 1 ? (
           <Badge tone="dim">持续出现 ×{issue.occurrenceCount}</Badge>
         ) : null}
-        <span style={{ marginLeft: "auto", fontSize: 11, color: tokens.textDim }}>
+        <span className="issue-seg">
           segment: {issue.segmentIds.join(", ") || "—"}
         </span>
       </div>
-      <div style={{ marginTop: 8, fontSize: 13 }}>
-        <div style={{ color: tokens.text }}>
-          原话：<span style={{ background: tokens.warnSoft, padding: "1px 4px", borderRadius: 4 }}>“{issue.quote}”</span>
-        </div>
-        <div style={{ color: tokens.textDim, marginTop: 4 }}>依据：{issue.basis}</div>
-        <div style={{ color: tokens.text, marginTop: 4 }}>建议：{issue.recommendation}</div>
+      <div className="issue-body">
+        <div>原话：<span className="issue-quote">“{issue.quote}”</span></div>
+        <div className="issue-basis">依据：{issue.basis}</div>
+        <div>建议：{issue.recommendation}</div>
         {issue.suggestedScript ? (
-          <div style={{ color: tokens.accent, marginTop: 4 }}>参考话术：{issue.suggestedScript}</div>
+          <div className="issue-script">参考话术：{issue.suggestedScript}</div>
         ) : null}
       </div>
       {onLocate && issue.segmentIds.length > 0 ? (
@@ -358,16 +363,16 @@ export function IssueCard({ issue, onLocate }: { issue: Issue; onLocate?: (segme
           <Button variant="ghost" onClick={() => onLocate(issue.segmentIds[0])}>定位原句</Button>
         </div>
       ) : null}
-    </div>
+    </article>
   );
 }
 
 /** Anchor row renderer used when locating segments. */
 export function SegmentAnchor({ seg }: { seg: TranscriptSegment }) {
   return (
-    <div id={`seg-${seg.id}`} style={{ display: "flex", gap: 8 }}>
-      <span style={{ color: tokens.textDim, flexShrink: 0 }}>{formatClock(seg.startMs)}</span>
-      <span>{seg.text}</span>
+    <div id={`seg-${seg.id}`} className="seg-row">
+      <span className="seg-time">{formatClock(seg.startMs)}</span>
+      <span className="seg-text">{seg.text}</span>
     </div>
   );
 }

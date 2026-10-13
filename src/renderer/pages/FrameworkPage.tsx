@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FrameworkRule } from "../../shared/contracts";
-import { Badge, Button, Panel, inputStyle, tokens } from "../ui/basics";
+import { Badge, Button, Panel } from "../ui/basics";
 import {
   FrameworkEditSchema,
   PRIORITY_LABEL,
@@ -116,31 +116,32 @@ export function FrameworkPage() {
     }
   }
 
-  if (!framework) return <div style={{ color: tokens.textDim }}>加载中…</div>;
+  if (!framework) return <div className="loading">加载中…</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <Panel title="基本信息">
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>话术名称</div>
+        <label className="field">
+          <div className="field-label">话术名称</div>
           <input
-            style={inputStyle}
+            className="input"
             value={framework.name}
             onChange={(e) => update({ name: e.target.value })}
           />
         </label>
-        <label style={{ display: "block" }}>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>
+        <label className="field">
+          <div className="field-label">
             已核实商品事实
             <Badge tone="info">允许作为 AI 判断输入</Badge>
           </div>
           <textarea
-            style={{ ...inputStyle, height: 80, resize: "vertical" }}
+            className="input textarea"
+            style={{ height: 80 }}
             placeholder={"只填写经核实的客观事实，每行一条。例如：\n304不锈钢内胆\n实验室恒温测试12小时（25℃环境）"}
             value={framework.productFacts}
             onChange={(e) => update({ productFacts: e.target.value })}
           />
-          <div style={{ fontSize: 12, color: tokens.textDim, marginTop: 4 }}>
+          <div className="field-hint">
             与“建议参考话术”不同：这里的内容会被 AI 当作已核实事实用于判断，未核实的内容不要填写。
           </div>
         </label>
@@ -165,9 +166,10 @@ export function FrameworkPage() {
       >
         {framework.steps.length === 0 ? <Empty text="还没有步骤。话术步骤用于检测讲解覆盖情况。" /> : null}
         {framework.steps.map((step, idx) => (
-          <div key={step.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div key={step.id} className="edit-row">
             <input
-              style={{ ...inputStyle, flex: 2 }}
+              className="input"
+              style={{ flex: 2 }}
               value={step.name}
               onChange={(e) => {
                 const steps = [...framework.steps];
@@ -176,7 +178,8 @@ export function FrameworkPage() {
               }}
             />
             <select
-              style={{ ...inputStyle, flex: 1 }}
+              className="input select"
+              style={{ flex: 1 }}
               value={step.priority}
               onChange={(e) => {
                 const steps = [...framework.steps];
@@ -191,7 +194,8 @@ export function FrameworkPage() {
             </select>
             <input
               type="number"
-              style={{ ...inputStyle, flex: 1 }}
+              className="input"
+              style={{ flex: 1 }}
               value={Math.round(step.maxWaitMs / 1000)}
               min={0}
               onChange={(e) => {
@@ -201,7 +205,7 @@ export function FrameworkPage() {
               }}
               title="最长等待时间（秒）"
             />
-            <span style={{ fontSize: 12, color: tokens.textDim, width: 90 }}>秒内需完成</span>
+            <span className="field-hint" style={{ width: 90 }}>秒内需完成</span>
             <Button variant="ghost" onClick={() => update({ steps: framework.steps.filter((s) => s.id !== step.id) })}>删除</Button>
           </div>
         ))}
@@ -224,15 +228,15 @@ export function FrameworkPage() {
           </Button>
         }
       >
-        <div style={{ fontSize: 12, color: tokens.textDim, marginBottom: 8 }}>
+        <div className="field-hint" style={{ marginBottom: 8 }}>
           禁用词/高风险词命中标记为严重；热词命中仅作提示（<Badge tone="dim">风险表达只触发提示，不直接判定违法</Badge>）。
           支持正则表达式。
         </div>
         {framework.rules.length === 0 ? <Empty text="还没有自定义规则。默认规则（绝对化用语/未核实宣称）始终生效。" /> : null}
         {framework.rules.map((rule, idx) => (
-          <div key={rule.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div key={rule.id} className="edit-row">
             <select
-              style={{ ...inputStyle, width: 140 }}
+              className="input select"
               value={rule.ruleType}
               onChange={(e) => {
                 const rules = [...framework.rules];
@@ -245,7 +249,8 @@ export function FrameworkPage() {
               ))}
             </select>
             <input
-              style={{ ...inputStyle, flex: 1 }}
+              className="input"
+              style={{ flex: 1 }}
               placeholder="词或正则，如 最好|第一"
               value={rule.pattern}
               onChange={(e) => {
@@ -255,7 +260,7 @@ export function FrameworkPage() {
               }}
             />
             <select
-              style={{ ...inputStyle, width: 140 }}
+              className="input select"
               value={rule.stepId ?? ""}
               onChange={(e) => {
                 const rules = [...framework.rules];
@@ -301,12 +306,12 @@ export function FrameworkPage() {
               e.target.value = "";
             }}
           />
-          {saveMsg ? <span style={{ fontSize: 13, color: saveMsg.ok ? tokens.ok : tokens.danger }}>{saveMsg.text}</span> : null}
+          {saveMsg ? <span className={saveMsg.ok ? "toast-ok" : "toast-err"}>{saveMsg.text}</span> : null}
         </div>
         {validationErrors.length > 0 ? (
-          <div style={{ marginTop: 10, padding: 10, background: tokens.dangerSoft, borderRadius: 6 }}>
+          <div className="callout callout-danger">
             {validationErrors.map((e, i) => (
-              <div key={i} style={{ fontSize: 12, color: tokens.danger }}>{e}</div>
+              <div key={i}>{e}</div>
             ))}
           </div>
         ) : null}
@@ -316,5 +321,5 @@ export function FrameworkPage() {
 }
 
 function Empty({ text }: { text: string }) {
-  return <div style={{ fontSize: 13, color: tokens.textDim, padding: "8px 0" }}>{text}</div>;
+  return <div className="empty">{text}</div>;
 }

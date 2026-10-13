@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import type { Settings } from "../../shared/contracts";
 import type { AsrStatusInfo, LlmStatusInfo } from "../../shared/api";
-import { Badge, Button, Field, Panel, inputStyle, tokens } from "../ui/basics";
+import { Badge, Button, Field, Panel, tokens } from "../ui/basics";
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [asrStatus, setAsrStatus] = useState<AsrStatusInfo | null>(null);
   const [llmStatus, setLlmStatus] = useState<LlmStatusInfo | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [asrMsg, setAsrMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [llmMsg, setLlmMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState<"asr" | "llm" | null>(null);
   const [showSecrets, setShowSecrets] = useState(false);
 
@@ -70,19 +72,23 @@ export function SettingsPage() {
 
   async function testAsr() {
     setTesting("asr");
-    setMsg(null);
+    setAsrMsg(null);
+    // 三项留空但已配置过 → 让主进程读库里已存配置测（渲染层不接触明文）
+    const useStored = !asrAppId && !asrSecretId && !asrSecretKey && !!asrStatus?.configured;
     try {
-      const result = await window.appApi.testAsrConnection({
-        provider: "tencent",
-        appId: asrAppId || asrStatus?.appId || "",
-        secretId: asrSecretId || (asrStatus?.secretIdTail ? `stored:${asrStatus.secretIdTail}` : ""),
-        secretKey: asrSecretKey || "stored",
-      });
-      setMsg(
+      const result = await window.appApi.testAsrConnection(
+        useStored
+          ? { useStored: true }
+          : { provider: "tencent", appId: asrAppId, secretId: asrSecretId, secretKey: asrSecretKey },
+      );
+      setAsrMsg(
         result.ok
           ? { ok: true, text: "腾讯云 ASR 连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
+    } catch (err) {
+      // 没有 catch 时 invoke 拒绝会静默吞掉，用户看到一个“没反应”的按钮
+      setAsrMsg({ ok: false, text: `连接失败：${err instanceof Error ? err.message : "未知错误"}` });
     } finally {
       setTesting(null);
     }
@@ -90,26 +96,33 @@ export function SettingsPage() {
 
   async function testLlm() {
     setTesting("llm");
-    setMsg(null);
+    setLlmMsg(null);
+    const useStored = !llmBaseUrl && !llmModel && !llmApiKey && !!llmStatus?.configured;
     try {
-      const result = await window.appApi.testLlmConnection({
-        base_url: llmBaseUrl || llmStatus?.baseUrl,
-        model: llmModel || llmStatus?.model,
-        api_key: llmApiKey || "stored-invalid",
-        request_timeout_ms: 10000,
-        max_retries: 0,
-      });
-      setMsg(
+      const result = await window.appApi.testLlmConnection(
+        useStored
+          ? { useStored: true }
+          : {
+              base_url: llmBaseUrl,
+              model: llmModel,
+              api_key: llmApiKey,
+              request_timeout_ms: 10000,
+              max_retries: 0,
+            },
+      );
+      setLlmMsg(
         result.ok
           ? { ok: true, text: "LLM 连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
+    } catch (err) {
+      setLlmMsg({ ok: false, text: `连接失败：${err instanceof Error ? err.message : "未知错误"}` });
     } finally {
       setTesting(null);
     }
   }
 
-  if (!settings) return <div style={{ color: tokens.textDim }}>加载中…</div>;
+  if (!settings) return <div className="loading">加载中…</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 760 }}>
@@ -128,11 +141,11 @@ export function SettingsPage() {
           )}
         </div>
         <Field label="App ID">
-          <input style={inputStyle} value={asrAppId} onChange={(e) => setAsrAppId(e.target.value)} placeholder="腾讯云账号 APPID" />
+          <input className="input" value={asrAppId} onChange={(e) => setAsrAppId(e.target.value)} placeholder="腾讯云账号 APPID" />
         </Field>
         <Field label="Secret ID">
           <input
-            style={inputStyle}
+            className="input"
             type={showSecrets ? "text" : "password"}
             value={asrSecretId}
             onChange={(e) => setAsrSecretId(e.target.value)}
@@ -141,7 +154,7 @@ export function SettingsPage() {
         </Field>
         <Field label="Secret Key" hint="密钥不会明文显示，不会写入日志或任何导出文件。">
           <input
-            style={inputStyle}
+            className="input"
             type={showSecrets ? "text" : "password"}
             value={asrSecretKey}
             onChange={(e) => setAsrSecretKey(e.target.value)}
@@ -154,6 +167,9 @@ export function SettingsPage() {
           </Button>
           <Button variant="ghost" onClick={() => setShowSecrets((v) => !v)}>{showSecrets ? "隐藏明文" : "临时显示明文"}</Button>
         </div>
+        {asrMsg ? (
+          <div style={{ marginTop: 8, fontSize: 13, color: asrMsg.ok ? tokens.ok : tokens.danger }}>{asrMsg.text}</div>
+        ) : null}
       </Panel>
 
       <Panel title="LLM（OpenAI 兼容接口）">
@@ -171,14 +187,14 @@ export function SettingsPage() {
           )}
         </div>
         <Field label="Base URL" hint="例如 https://api.openai.com/v1 或其他兼容服务地址">
-          <input style={inputStyle} value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} placeholder="https://…" />
+          <input className="input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} placeholder="https://…" />
         </Field>
         <Field label="模型名">
-          <input style={inputStyle} value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="gpt-4o-mini / glm-4-flash / …" />
+          <input className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="gpt-4o-mini / glm-4-flash / …" />
         </Field>
         <Field label="API Key" hint="仅保存在本地数据库 settings 表，界面只显示脱敏尾部。">
           <input
-            style={inputStyle}
+            className="input"
             type={showSecrets ? "text" : "password"}
             value={llmApiKey}
             onChange={(e) => setLlmApiKey(e.target.value)}
@@ -188,12 +204,15 @@ export function SettingsPage() {
         <Button onClick={testLlm} disabled={testing === "llm"}>
           {testing === "llm" ? "测试中…" : "测试连接"}
         </Button>
+        {llmMsg ? (
+          <div style={{ marginTop: 8, fontSize: 13, color: llmMsg.ok ? tokens.ok : tokens.danger }}>{llmMsg.text}</div>
+        ) : null}
       </Panel>
 
       <Panel title="分析设置">
         <Field label="分析间隔">
           <select
-            style={inputStyle}
+            className="input select"
             value={settings.windowIntervalSec}
             onChange={(e) => setSettings({ ...settings, windowIntervalSec: Number(e.target.value) as Settings["windowIntervalSec"] })}
           >
@@ -204,7 +223,7 @@ export function SettingsPage() {
         </Field>
         <Field label="分析窗口">
           <select
-            style={inputStyle}
+            className="input select"
             value={settings.windowSizeSec}
             onChange={(e) => setSettings({ ...settings, windowSizeSec: Number(e.target.value) as Settings["windowSizeSec"] })}
           >
@@ -216,7 +235,7 @@ export function SettingsPage() {
         <Field label="请求超时（毫秒）">
           <input
             type="number"
-            style={inputStyle}
+            className="input"
             value={settings.llm?.request_timeout_ms ?? 30000}
             onChange={(e) =>
               setSettings({
@@ -229,7 +248,7 @@ export function SettingsPage() {
         <Field label="单场预算上限（LLM 请求数）" hint="超过后停止 LLM 分析（本地规则仍生效），防止费用失控。">
           <input
             type="number"
-            style={inputStyle}
+            className="input"
             value={settings.llm?.budget_limit ?? 10}
             onChange={(e) =>
               setSettings({
@@ -250,7 +269,7 @@ export function SettingsPage() {
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Button variant="primary" onClick={doSave}>保存全部设置</Button>
-        {msg ? <span style={{ fontSize: 13, color: msg.ok ? tokens.ok : tokens.danger }}>{msg.text}</span> : null}
+        {msg ? <span className={msg.ok ? "toast-ok" : "toast-err"}>{msg.text}</span> : null}
       </div>
     </div>
   );
