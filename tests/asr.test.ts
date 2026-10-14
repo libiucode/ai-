@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { parseTencentMessage, TencentAsrAdapter } from "../src/main/asr/tencentAdapter";
 import { buildTencentAsrUrl } from "../src/main/asr/tencentSign";
 import { AsrConfigSchema } from "../src/shared/schemas";
@@ -75,23 +76,79 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
   });
 });
 
-describe("腾讯云 ASR 签名", () => {
-  it("生成 wss url 且不含明文 secretKey", () => {
+describe("腾讯云 ASR 签名（官方 HMAC-SHA1，非 TC3）", () => {
+  it("签名 = Base64(HmacSHA1(host+path+排序query, SecretKey))，URL 带 signature 参数", () => {
     const { url } = buildTencentAsrUrl({
-      appId: "125000000",
+      appId: "125922123",
       secretId: "AKIDtest",
       secretKey: "super-secret-key",
       engineModelType: "16k_zh",
-      voiceId: "voice-123",
+      voiceId: "c64385ee-3e5c-4fc5-bbfd-7c71addb35b0",
       sampleRate: 16000,
       audioFormat: 1,
       wordInfoEnabled: 1,
       needvad: 1,
       now: new Date("2026-01-01T00:00:00Z"),
     });
-    expect(url.startsWith("wss://asr.cloud.tencent.com/asr/v2/125000000?")).toBe(true);
+    // 规范 URI 含 appid 路径段；不是 TC3 的 authorization 参数
+    expect(url.startsWith("wss://asr.cloud.tencent.com/asr/v2/125922123?")).toBe(true);
     expect(url).not.toContain("super-secret-key");
-    expect(url).toContain("authorization=");
+    expect(url).not.toContain("authorization=");
+    expect(url).toContain("&signature=");
+
+    // 独立复算：从 URL 取回参数重排，验证 signature 与官方算法一致
+    const u = new URL(url);
+    const sig = u.searchParams.get("signature");
+    expect(sig).toBeTruthy();
+    const rest = [...u.searchParams.entries()]
+      .filter(([k]) => k !== "signature")
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
+    const expected = crypto
+      .createHmac("sha1", "super-secret-key")
+      .update(`${u.host}${u.pathname}?${rest}`)
+      .digest("base64");
+    expect(sig).toBe(expected);
+  });
+
+  it("查询参数按字典序排序（服务端按排序结果重算签名，顺序错即鉴权失败）", () => {
+    const { url } = buildTencentAsrUrl({
+      appId: "125922123",
+      secretId: "AKIDtest",
+      secretKey: "super-secret-key",
+      engineModelType: "16k_zh",
+      voiceId: "c64385ee-3e5c-4fc5-bbfd-7c71addb35b0",
+      sampleRate: 16000,
+      audioFormat: 1,
+      wordInfoEnabled: 1,
+      needvad: 1,
+    });
+    const keys = [...new URL(url).searchParams.keys()];
+    // 参与签名的参数必须字典序（signature 本身排在最后，不参与排序断言）
+    const signed = keys.filter((k) => k !== "signature");
+    expect(signed).toEqual([...signed].sort());
+    expect(keys[keys.length - 1]).toBe("signature");
+  });
+
+  it("hotwordId 非空时进 query；sampleRate 非 16k 时才进 query", () => {
+    const base = {
+      appId: "125922123",
+      secretId: "AKIDtest",
+      secretKey: "super-secret-key",
+      engineModelType: "16k_zh",
+      voiceId: "c64385ee-3e5c-4fc5-bbfd-7c71addb35b0",
+      audioFormat: 1,
+      wordInfoEnabled: 1,
+      needvad: 1,
+    };
+    const plain = new URL(buildTencentAsrUrl({ ...base, sampleRate: 16000 }).url);
+    expect(plain.searchParams.has("hotword_id")).toBe(false);
+    expect(plain.searchParams.has("sample_rate")).toBe(false);
+
+    const full = new URL(buildTencentAsrUrl({ ...base, sampleRate: 8000, hotwordId: "abc123" }).url);
+    expect(full.searchParams.get("hotword_id")).toBe("abc123");
+    expect(full.searchParams.get("sample_rate")).toBe("8000");
   });
 });
 

@@ -75,6 +75,12 @@ export function SettingsPage() {
     setAsrMsg(null);
     // 三项留空但已配置过 → 让主进程读库里已存配置测（渲染层不接触明文）
     const useStored = !asrAppId && !asrSecretId && !asrSecretKey && !!asrStatus?.configured;
+    // 防呆：App ID 必须是纯数字（填成“腾讯”这类会绕一圈问服务器才报 4001）
+    if (!useStored && asrAppId && !/^\d+$/.test(asrAppId)) {
+      setTesting(null);
+      setAsrMsg({ ok: false, text: `App ID 应为纯数字（腾讯云控制台 → 账号信息里的 APPID，如 1258899888），当前填的是「${asrAppId}」` });
+      return;
+    }
     try {
       const result = await window.appApi.testAsrConnection(
         useStored

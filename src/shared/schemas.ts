@@ -138,6 +138,7 @@ export const ReportFormatSchema = z.enum(["markdown", "json"]);
 export const IpcChannels = {
   sessionStart: "session.start",
   sessionPause: "session.pause",
+  sessionResume: "session.resume",
   sessionStop: "session.stop",
   sessionList: "session.list",
   sessionDetail: "session.detail",

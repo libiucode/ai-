@@ -142,7 +142,12 @@ export function useMonitorState() {
     setUiState("paused");
   }, [setUiState]);
 
-  const resumeSession = useCallback(() => setUiState("capturing"), [setUiState]);
+  // 恢复：必须通知主进程（历史上只改 UI 状态，主进程永远停在 paused）
+  const resumeSession = useCallback(async () => {
+    setUiState("starting");
+    await window.appApi.resumeSession();
+    setUiState("capturing");
+  }, [setUiState]);
 
   const stopSession = useCallback(async () => {
     setUiState("stopping");

@@ -84,8 +84,13 @@ export class PcmResamplerSlicer {
   push(input: Float32Array, sourceRate: number, inputStartMs: number): AudioPacket[] {
     const packets: AudioPacket[] = [];
     const ratio = sourceRate / SAMPLE_RATE;
-    let i = 0;
-    while (i < input.length) {
+    // 输出样本数 = 输入样本数 / 采样率比（44100→16k 时 4096 入 → 1486 出）。
+    // 历史 bug：循环按 input.length 迭代，等于把流升采样并补零——每个 push 产出
+    // ratio 倍于真实时长的音频（44.1k 设备上音频时钟快 2.76 倍），包时间戳跑到
+    // 会话时钟前面 → 主进程按墙上时钟排水时队列疯狂溢出、旧包（该发的）被丢 →
+    // ASR 收不到东西。2026-10-14 用户实测：14 秒会话队列溢出 17 次、0 条转写。
+    const outCount = Math.floor(input.length / ratio);
+    for (let i = 0; i < outCount; i++) {
       const srcIdx = Math.floor(i * ratio);
       const nextIdx = Math.min(Math.floor((i + 1) * ratio), input.length);
       let sum = 0;
@@ -93,8 +98,9 @@ export class PcmResamplerSlicer {
       const avg = nextIdx > srcIdx ? sum / (nextIdx - srcIdx) : 0;
       const s = Math.max(-1, Math.min(1, avg));
       this.ringBuffer[this.buffered++] = Math.round(s * 32767);
-      i++;
-      if (this.buffered >= PACKET_SAMPLES) {
+      // 成包。放在循环内逐样本检查，保证 buffered 永远 < PACKET_SAMPLES+1，
+      // 不会溢出环形缓冲（1 秒容量）；while 兼容极端大包一次连产多包。
+      while (this.buffered >= PACKET_SAMPLES) {
         const out = this.ringBuffer.slice(0, PACKET_SAMPLES);
         packets.push({
           pcm: out.buffer.slice(0),
@@ -102,7 +108,11 @@ export class PcmResamplerSlicer {
           durationMs: PACKET_MS,
         });
         this.nextStartMs += PACKET_MS;
-        this.buffered = 0;
+        // 保留残余样本：把不满一包的 [PACKET_SAMPLES, buffered) 挪到缓冲区开头，
+        // 下次 push 接着用。历史 bug：这里直接 buffered=0，每成一次包丢一份残余
+        // （48k 设备每次丢 ~895/3200 ≈ 22%），直播监管场景下字幕会周期性缺片。
+        this.ringBuffer.copyWithin(0, PACKET_SAMPLES, this.buffered);
+        this.buffered -= PACKET_SAMPLES;
       }
     }
     return packets;

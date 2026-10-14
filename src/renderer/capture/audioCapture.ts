@@ -26,6 +26,7 @@ export type CaptureStartError =
 export async function startMicCapture(
   deviceId: string | null,
   onLevel: (level: number) => void,
+  onEnded: () => void,
 ): Promise<CaptureStartResult | { ok: false; error: CaptureStartError }> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -33,7 +34,7 @@ export async function startMicCapture(
         ? { deviceId: { exact: deviceId }, echoCancellation: false, noiseSuppression: false }
         : { echoCancellation: false, noiseSuppression: false },
     });
-    return { ok: true, handle: wireStream(stream, "麦克风", onLevel) };
+    return { ok: true, handle: wireStream(stream, "麦克风", onLevel, onEnded) };
   } catch (err) {
     const e = err as DOMException;
     if (e.name === "NotAllowedError") {
@@ -48,6 +49,7 @@ export async function startMicCapture(
 
 export async function startLoopbackCapture(
   onLevel: (level: number) => void,
+  onEnded: () => void,
 ): Promise<CaptureStartResult | { ok: false; error: CaptureStartError }> {
   let stream: MediaStream;
   try {
@@ -100,10 +102,15 @@ export async function startLoopbackCapture(
   }
   // video track is unused; stop it to save resources but keep audio alive
   stream.getVideoTracks().forEach((t) => t.stop());
-  return { ok: true, handle: wireStream(new MediaStream(audioTracks), "系统声音", onLevel) };
+  return { ok: true, handle: wireStream(new MediaStream(audioTracks), "系统声音", onLevel, onEnded) };
 }
 
-function wireStream(stream: MediaStream, sourceLabel: string, onLevel: (level: number) => void): CaptureHandle {
+function wireStream(
+  stream: MediaStream,
+  sourceLabel: string,
+  onLevel: (level: number) => void,
+  onEnded: () => void,
+): CaptureHandle {
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
   // ScriptProcessor keeps a stable, dependency-free tap on the raw samples.
@@ -122,6 +129,14 @@ function wireStream(stream: MediaStream, sourceLabel: string, onLevel: (level: n
   mute.connect(ctx.destination);
 
   const stopped = { value: false };
+  // 设备失效监听：被拔出/被独占/音频服务重启（设备哈希变化）时，已拿到的轨道会
+  // 静默 ended——没有这个监听，应用会一直显示"采集中"却永远收不到音频。
+  // 2026-10-14 实测：VB-CABLE 哈希变化后旧轨道死亡，用户看到"都正常但零字幕"。
+  stream.getAudioTracks().forEach((t) => {
+    t.addEventListener("ended", () => {
+      if (!stopped.value) onEnded();
+    });
+  });
   return {
     sourceLabel,
     stop() {

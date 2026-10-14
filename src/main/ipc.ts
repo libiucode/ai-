@@ -101,6 +101,10 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     if (active()) await orchestrator.pause();
   });
 
+  ipcMain.handle(IpcChannels.sessionResume, async () => {
+    if (active()) await orchestrator.resume();
+  });
+
   ipcMain.handle(IpcChannels.sessionStop, async () => {
     if (active()) await orchestrator.stop();
   });

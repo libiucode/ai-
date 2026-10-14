@@ -1,5 +1,6 @@
-node_modules/
-dist/
-release/
-*.log
 *.db
+*.log
+dist/
+node_modules/
+release-*/
+release/

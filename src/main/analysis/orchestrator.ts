@@ -16,7 +16,7 @@ import type {
   Issue,
   ScriptStatus,
 } from "../../shared/contracts";
-import type { Settings, StartSessionConfig } from "../../shared/schemas";
+import type { Settings, StartSessionConfig, AsrConfig } from "../../shared/schemas";
 import { makeError } from "../security/errorFactory";
 
 export class SessionOrchestrator {
@@ -118,14 +118,23 @@ export class SessionOrchestrator {
     const settings: Settings = settingsRaw ? JSON.parse(settingsRaw) : {};
     const asrRaw = this.store.getSetting("asr_config");
     if (asrRaw) {
+      // 非阻塞连接：ASR 的 WS 握手慢或挂住时，绝不能挡住采集、调度器和计时器就位。
+      // 历史事故（2026-10-14）：await connect 卡死 → 会话停在"启动中"假死、
+      // 分析永不运行、用户看到"没反应"。失败照常弹错误，会话继续本地采集。
+      let asrCfg: AsrConfig | undefined;
       try {
-        await this.asr.connect(JSON.parse(asrRaw));
-      } catch (err) {
-        this.emit("app.error", makeError(
-          "ASR_CONNECT_FAILED",
-          `ASR 连接失败: ${err instanceof Error ? err.message : "unknown"}`,
-          true,
-        ));
+        asrCfg = JSON.parse(asrRaw) as AsrConfig;
+      } catch {
+        this.emit("app.error", makeError("ASR_CONFIG_INVALID", "ASR 配置解析失败，请重新保存密钥", false));
+      }
+      if (asrCfg !== undefined) {
+        void this.asr.connect(asrCfg).catch((err) => {
+          this.emit("app.error", makeError(
+            "ASR_CONNECT_FAILED",
+            `ASR 连接失败: ${err instanceof Error ? err.message : "unknown"}`,
+            true,
+          ));
+        });
       }
     } else {
       this.emit("app.error", makeError(
@@ -189,6 +198,41 @@ export class SessionOrchestrator {
     this.store.updateSessionStatus(this.sessionId!, "paused");
     this.audioStatus = { ...this.audioStatus, state: "paused" };
     this.emit("capture.status", this.audioStatus);
+    // 同步断开 ASR：否则服务端 15 秒收不到音频会主动掐连接（4008），
+    // 适配器还会自动重连再被饿死，循环浪费连接与配额。恢复时重连。
+    // 2026-10-14 用户实测：暂停 2 分钟收到 4008 + 满屏断线重连警告。
+    try {
+      await this.asr.stop();
+    } catch { /* best effort */ }
+  }
+
+  /**
+   * 恢复监听。渲染层负责重启采集；主进程重新激活并重连 ASR
+   * （暂停时已断开）。历史上没有 resume 通道，「继续」按钮只改 UI 状态，
+   * 主进程永远停在 paused——字幕再也不来，只能结束会话重开。
+   */
+  async resume() {
+    if (this.status !== "paused") return;
+    this.status = "active";
+    this.store.updateSessionStatus(this.sessionId!, "active");
+    this.audioStatus = { ...this.audioStatus, state: "capturing" };
+    this.emit("capture.status", this.audioStatus);
+    const asrRaw = this.store.getSetting("asr_config");
+    if (!asrRaw) return;
+    let asrCfg: AsrConfig;
+    try {
+      asrCfg = JSON.parse(asrRaw) as AsrConfig;
+    } catch {
+      this.emit("app.error", makeError("ASR_CONFIG_INVALID", "ASR 配置解析失败，请重新保存密钥", false));
+      return;
+    }
+    void this.asr.connect(asrCfg).catch((err) => {
+      this.emit("app.error", makeError(
+        "ASR_CONNECT_FAILED",
+        `ASR 连接失败: ${err instanceof Error ? err.message : "unknown"}`,
+        true,
+      ));
+    });
   }
 
   async stop() {

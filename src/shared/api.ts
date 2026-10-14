@@ -62,6 +62,7 @@ export type EventListener<K extends keyof AppEvents> = (
 export interface WindowApi {
   startSession(config: StartSessionConfig): Promise<StartSessionResult>;
   pauseSession(): Promise<void>;
+  resumeSession(): Promise<void>;
   stopSession(): Promise<void>;
   listAudioDevices(): Promise<AudioDevice[]>;
   selectAudioDevice(id: string): Promise<boolean>;

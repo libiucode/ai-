@@ -67,9 +67,9 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     const onLevel = (l: number) => setLevel(l);
     let result;
     if (source === "microphone") {
-      result = await startMicCapture(deviceId, onLevel);
+      result = await startMicCapture(deviceId, onLevel, handleCaptureEnded);
     } else {
-      result = await startLoopbackCapture(onLevel);
+      result = await startLoopbackCapture(onLevel, handleCaptureEnded);
     }
     if (!result.ok) {
       setCaptureError(result.error.message);
@@ -82,11 +82,46 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     });
   }
 
+  // 采集轨道静默死亡（设备拔出/被独占/音频服务重启导致哈希变化）：
+  // 弹出可操作错误并结束会话——而不是让界面假装还在采。
+  async function handleCaptureEnded() {
+    setCaptureError(
+      "音频设备已失效（被拔出、被其他程序独占，或音频服务重启）。" +
+      "请在音源下拉里重新选择设备后再开始监听。",
+    );
+    captureRef.current?.stop();
+    captureRef.current = null;
+    setLevel(0);
+    await mon.stopSession();
+  }
+
   async function doStop() {
     captureRef.current?.stop();
     captureRef.current = null;
     setLevel(0);
     await mon.stopSession();
+  }
+
+  // 暂停 = 真停：先停渲染层采集（否则 ScriptProcessor 继续跑、电平条说谎、
+  // 音频包继续发给主进程被丢弃、ASR 被饿死报 4008），再通知主进程。
+  async function doPause() {
+    captureRef.current?.stop();
+    captureRef.current = null;
+    setLevel(0);
+    await mon.pauseSession();
+  }
+
+  // 恢复 = 真重开：先重启采集（设备可能已在暂停期间失效），再通知主进程重连 ASR。
+  async function doResume() {
+    setCaptureError(null);
+    const cap = await startMicCapture(deviceId, (l) => setLevel(l), handleCaptureEnded);
+    if (!cap.ok) {
+      // 采集起不来就别恢复会话——让用户看到原因（设备失效/被占用）
+      setCaptureError(cap.error.message);
+      return;
+    }
+    captureRef.current = cap.handle;
+    await mon.resumeSession();
   }
 
   const audio = mon.audio;
@@ -151,9 +186,9 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
               </>
             ) : null}
             {mon.sessionState === "paused" ? (
-              <Button variant="primary" onClick={mon.resumeSession}>继续</Button>
+              <Button variant="primary" onClick={doResume}>继续</Button>
             ) : null}
-            {active ? <Button onClick={mon.pauseSession}>暂停</Button> : null}
+            {active ? <Button onClick={doPause}>暂停</Button> : null}
             {active || mon.sessionState === "paused" ? (
               <Button variant="danger" onClick={doStop}>结束</Button>
             ) : null}

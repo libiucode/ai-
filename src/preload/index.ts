@@ -34,6 +34,7 @@ const api = {
   startSession: (config: StartSessionConfig) =>
     ipcRenderer.invoke(IpcChannels.sessionStart, config) as Promise<StartSessionResult>,
   pauseSession: () => ipcRenderer.invoke(IpcChannels.sessionPause),
+  resumeSession: () => ipcRenderer.invoke(IpcChannels.sessionResume),
   stopSession: () => ipcRenderer.invoke(IpcChannels.sessionStop),
   listAudioDevices: async (): Promise<AudioDevice[]> => {
     // enumerate via standard browser API (validated main-side)
