@@ -4,14 +4,56 @@
   "private": true,
   "description": "AI 盯播工具 - 核心全链路",
   "main": "dist/main/main/index.js",
+  "build": {
+    "appId": "com.local.ai-live-monitor",
+    "productName": "AI盯播工具",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**",
+      "node_modules/bindings/**",
+      "node_modules/file-uri-to-path/**"
+    ],
+    "npmRebuild": false,
+    "electronVersion": "33.4.11",
+    "files": [
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "package.json",
+      "!node_modules/**/prebuilds/**"
+    ],
+    "directories": {
+      "output": "release-verify",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "sign": null,
+      "signAndEditExecutable": false,
+      "signingHashAlgorithms": []
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "AI盯播工具-Setup-${version}.exe"
+    }
+  },
   "scripts": {
     "dev": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json && electron .",
     "dev:renderer": "vite",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
-    "pretest": "node scripts/ensure-sqlite-abi.js",
-    "test": "vitest run",
+    "test": "node scripts/test-electron-node.js",
     "build": "vite build --config vite.renderer.config.ts && tsc -p tsconfig.main.json",
     "smoke": "electron scripts/smoke-renderer.js",
+    "prepackage": "npm run typecheck && npm run build && node scripts/verify-electron-native.js",
     "package": "electron-builder",
     "abi:node": "cd node_modules/better-sqlite3 && node ../prebuild-install/bin.js -r node",
     "abi:electron": "cd node_modules/better-sqlite3 && node ../prebuild-install/bin.js -r electron -t 33.4.11"

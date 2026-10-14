@@ -1,0 +1,497 @@
+{
+  "credentials": {
+    "appId": "configured",
+    "secretId": "configured",
+    "secretKey": "configured"
+  },
+  "measuredAtIso": "2026-10-14T14:46:33.347Z",
+  "source": "scripts/asr-bench/run-3min.log",
+  "summary": {
+    "parseError": "Expected ',' or ']' after array element in JSON at position 829 (line 44 column 8)"
+  },
+  "opens": [
+    {
+      "n": 1,
+      "handshakeMs": 369,
+      "connIdx": 1
+    },
+    {
+      "n": 2,
+      "handshakeMs": 1326,
+      "connIdx": 2
+    }
+  ],
+  "events": [
+    ">>> SIMULATE_NETWORK_CUT: terminating socket",
+    "WS_CLOSE 1006 connIdx 1",
+    ">>> REOPEN",
+    "WS_CLOSE 1006 connIdx 2"
+  ],
+  "finals": [
+    {
+      "conn": 1,
+      "seq": 0,
+      "startMs": 0,
+      "endMs": 9200,
+      "e2eMs": 411,
+      "firstTokenLatencyMs": 725,
+      "text": "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。"
+    },
+    {
+      "conn": 1,
+      "seq": 1,
+      "startMs": 9300,
+      "endMs": 20520,
+      "e2eMs": 895,
+      "firstTokenLatencyMs": 1079,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。"
+    },
+    {
+      "conn": 1,
+      "seq": 2,
+      "startMs": 20600,
+      "endMs": 32420,
+      "e2eMs": 1384,
+      "firstTokenLatencyMs": 1819,
+      "text": "这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明显提亮。这个是实测数据。"
+    },
+    {
+      "conn": 1,
+      "seq": 3,
+      "startMs": 32540,
+      "endMs": 41900,
+      "e2eMs": 1400,
+      "firstTokenLatencyMs": 1749,
+      "text": "来运营，帮我把这个优惠券再上1万张，321上链接，宝宝们直接冲手慢五。"
+    },
+    {
+      "conn": 1,
+      "seq": 4,
+      "startMs": 41960,
+      "endMs": 51960,
+      "e2eMs": 1807,
+      "firstTokenLatencyMs": 2079,
+      "text": "很多姐妹问我敏感肌能不能用，我在这里承诺，所有肤质都可以放心食用，没有任何刺激。"
+    },
+    {
+      "conn": 1,
+      "seq": 5,
+      "startMs": 52040,
+      "endMs": 63580,
+      "e2eMs": 2049,
+      "firstTokenLatencyMs": 2627,
+      "text": "这款面霜添加了二裂酵母和依克多，因修复屏障的效果非常好。换季烂脸的时候厚涂一层，第二天就稳了。"
+    },
+    {
+      "conn": 1,
+      "seq": 6,
+      "startMs": 63680,
+      "endMs": 74740,
+      "e2eMs": 2482,
+      "firstTokenLatencyMs": 2765,
+      "text": "我们现在做的是7天无理由退换货，而且赠送运费险。你收到货不满意，直接退，没有任何风险。"
+    },
+    {
+      "conn": 1,
+      "seq": 7,
+      "startMs": 74880,
+      "endMs": 84400,
+      "e2eMs": 2635,
+      "firstTokenLatencyMs": 2939,
+      "text": "咱们这款是原装进口的海外直邮，每一瓶都有溯源码，扫一下就能看到完整的链路。"
+    },
+    {
+      "conn": 2,
+      "seq": 0,
+      "startMs": 0,
+      "endMs": 5140,
+      "e2eMs": 236,
+      "firstTokenLatencyMs": 490,
+      "text": "播了想要的家人们，抓紧时间倒数十个数。"
+    },
+    {
+      "conn": 2,
+      "seq": 1,
+      "startMs": 5200,
+      "endMs": 14120,
+      "e2eMs": 525,
+      "firstTokenLatencyMs": 780,
+      "text": "感谢榜一大哥送的嘉年华，来给大家表演一个才艺。谢谢大哥的支持，大哥大气。"
+    },
+    {
+      "conn": 2,
+      "seq": 2,
+      "startMs": 14180,
+      "endMs": 23100,
+      "e2eMs": 705,
+      "firstTokenLatencyMs": 1242,
+      "text": "接下来这款是第二代升级版，相比第一代多了控油哑光的效果，油皮姐妹放心入。"
+    },
+    {
+      "conn": 2,
+      "seq": 3,
+      "startMs": 23160,
+      "endMs": 32820,
+      "e2eMs": 954,
+      "firstTokenLatencyMs": 1236,
+      "text": "这款面膜是械字号备案的医美级修护，做完项目之后连敷3天，退红速度肉眼可见。"
+    },
+    {
+      "conn": 2,
+      "seq": 4,
+      "startMs": 32900,
+      "endMs": 40980,
+      "e2eMs": 1235,
+      "firstTokenLatencyMs": 1471,
+      "text": "咱们主播自己都在用，已经空瓶4罐了，不好用。我敢在直播间说这话吗？"
+    },
+    {
+      "conn": 2,
+      "seq": 5,
+      "startMs": 41000,
+      "endMs": 50480,
+      "e2eMs": 1589,
+      "firstTokenLatencyMs": 1833,
+      "text": "拍下默认发顺丰空运江浙沪次日达偏远地区，3天内也能到。物流这块不用担心。"
+    },
+    {
+      "conn": 2,
+      "seq": 6,
+      "startMs": 50500,
+      "endMs": 59560,
+      "e2eMs": 1942,
+      "firstTokenLatencyMs": 2162,
+      "text": "今天这场是品牌专场，所有货都是官方仓直发，支持专柜验货，假一赔十。"
+    },
+    {
+      "conn": 2,
+      "seq": 7,
+      "startMs": 59660,
+      "endMs": 67980,
+      "e2eMs": 1989,
+      "firstTokenLatencyMs": 2385,
+      "text": "宝宝们有什么问题打在公屏上，我每一条都会看。优先回答带截图的问题。"
+    },
+    {
+      "conn": 2,
+      "seq": 8,
+      "startMs": 68080,
+      "endMs": 76900,
+      "e2eMs": 2406,
+      "firstTokenLatencyMs": 2695,
+      "text": "这个色号是热门色，黄皮白皮都能驾驭，素颜图也很提气色，完全不挑人。"
+    },
+    {
+      "conn": 2,
+      "seq": 9,
+      "startMs": 76920,
+      "endMs": 81265,
+      "e2eMs": 2635,
+      "firstTokenLatencyMs": 2985,
+      "text": "现在库存只剩最后2000单，运营把库存。"
+    }
+  ],
+  "partialSample": [
+    {
+      "sliceType": 0,
+      "conn": 1,
+      "seq": 0,
+      "text": "好"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "好"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好欢"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好欢迎来到"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好欢迎来到直播间"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间今天给"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间今天给大家带"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间今天给大家带来一款"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间，今天给大家带来一款网斩"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间，今天给大家带来一款王炸单品"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间，今天给大家带来一款王炸单品这个"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间，今天给大家带来一款王炸单品这个真的是"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 0,
+      "text": "家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款"
+    },
+    {
+      "sliceType": 0,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们谁懂啊"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们谁懂啊这个"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊这个价格"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊这个价格我真的会"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊这个价格我真的会谢"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊这个价格我真的会谢官方"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢官方旗舰店"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢官方旗舰店平时"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢官方旗舰店平时都要"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢官方旗舰店平时都要三百多"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢官方旗舰店平时都要三百多斤"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要三百多今天在"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要三百多今天在我直播"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要三百多今天在我直播间直接"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要三百多今天在我直播间直接给你"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 1,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来"
+    },
+    {
+      "sliceType": 0,
+      "conn": 1,
+      "seq": 2,
+      "text": "这"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺浓度"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺浓度百分之"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺浓度百分之五"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺。浓度百分之五坚持"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺。浓度百分之五坚持用七天"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺。浓度百分之五坚持用七天你就能"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺。浓度百分之五坚持用七天你就能看到"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明"
+    },
+    {
+      "sliceType": 1,
+      "conn": 1,
+      "seq": 2,
+      "text": "这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明显提亮"
+    }
+  ],
+  "partialCount": 269
+}

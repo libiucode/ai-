@@ -1,0 +1,17 @@
+﻿{
+    "chunkFile":  "D:\\ai盯播工具\\app\\evidence\\loopback-click-chunks-20261014-215940.json",
+    "kind":  "loopback-via-real-click",
+    "final":  {
+                  "chunkCount":  0,
+                  "errors":  [
+
+                             ]
+              },
+    "buttonClick":  {
+                        "x":  1157,
+                        "y":  53.75,
+                        "text":  "监听系统声音",
+                        "disabled":  false
+                    },
+    "at":  "2026-10-14T22:00:36.4722072+08:00"
+}

@@ -1,0 +1,403 @@
+﻿{
+    "firstFinalAtSecond":  null,
+    "console":  [
+                    {
+
+                    }
+                ],
+    "kind":  "loopback-with-asr",
+    "ui":  {
+               "finalCount":  0,
+               "partialCount":  0,
+               "timer":  "00:00",
+               "sessionId":  "0",
+               "asrChip":  "ASR未连接",
+               "lastFinalChip":  "最后稳态—",
+               "callouts":  [
+
+                            ],
+               "subtitleCandidates":  [
+                                          "AI 盯播工具直播话术实时质检",
+                                          "AI 盯播工具直播话术实时质检",
+                                          "AI 盯播工具",
+                                          "直播话术实时质检",
+                                          "ASR未连接",
+                                          "ASR",
+                                          "临时字幕为识别中间结果（灰色斜体），不落库；稳态字幕为已定稿内容。",
+                                          "00:00",
+                                          "精确值见分析窗口与报告",
+                                          "按间隔触发",
+                                          "尚未开始监听，或未配置话术步骤。开始监听后，这里会实时显示当前话术阶段、停留时长与步骤超时提醒（步骤在「话术配置」中维护）。",
+                                          "问题提醒（本次会话 0 条）",
+                                          "问题提醒（本次会话 0 条）",
+                                          "暂无问题。分析窗口完成后，新问题会出现在这里。"
+                                      ],
+               "lastFinalText":  "暂无问题。分析窗口完成后，新问题会出现在这里。"
+           },
+    "start":  {
+                  "steps":  [
+                                "getDisplayMedia",
+                                "resolved"
+                            ],
+                  "videoTracks":  1,
+                  "audioTracks":  1,
+                  "audioLabel":  "System audio",
+                  "ctxState":  "running",
+                  "ctxSampleRate":  48000,
+                  "ok":  true
+              },
+    "at":  "2026-10-14T22:31:15.2197530+08:00",
+    "level":  {
+                  "chunkCount":  598,
+                  "totalSamples":  2449408,
+                  "wallMs":  50929,
+                  "nonzeroChunks":  598,
+                  "allZeroMeanChunks":  0,
+                  "fullyZeroChunks":  0,
+                  "meanOfMeans":  0.018595370383954514,
+                  "maxMean":  0.021267462936521042,
+                  "maxPeak":  0.04669331759214401,
+                  "minPeak":  0.000030518509447574615,
+                  "medianIntervalMs":  89,
+                  "chunksPerSec":  11.741836674586189,
+                  "sampleRates":  [
+                                      48000
+                                  ],
+                  "anyNan":  false,
+                  "anyClipped":  false,
+                  "totalNan":  0,
+                  "totalClip":  0,
+                  "errors":  [
+
+                             ],
+                  "callouts":  [
+
+                               ],
+                  "pageHead":  "AI 盯播工具\n直播话术实时质检\n实时监控\n话术配置\n分析设置\n历史与报告\n记录保存在本机数据库\n音频与转写按配置\n发送至 ASR / AI 服务\n未开始\n会话 —\n音源 —\n默认麦克风\nDefault - 麦克风 (Razer USB Sound Card) (1532:0529)\nCommunications - 麦克风 (Razer USB Sound Card) (1532:0529)\n麦克风 (Razer USB Sound Card) (1532:0529)\n麦克风 (Realtek(R) Audio)\nCABLE Output (VB-Audio Virtual Cable)\n开"
+              },
+    "chunkFile":  "D:\\ai盯播工具\\app\\evidence\\final-chunks-20261014-223019.json",
+    "playback":  {
+                     "isLiveStream":  false,
+                     "mix":  "440+880Hz volume0.6",
+                     "seconds":  45,
+                     "rate":  48000,
+                     "file":  "C:\\Users\\libiu\\AppData\\Local\\Temp\\probe-src-20261014-223019.wav"
+                 },
+    "samples":  [
+                    {
+                        "t":  1,
+                        "chunks":  36,
+                        "mean":  0.021260805348674694,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  2,
+                        "chunks":  49,
+                        "mean":  0.021215804766598012,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  3,
+                        "chunks":  60,
+                        "mean":  0.02120265077633121,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  4,
+                        "chunks":  72,
+                        "mean":  0.021058668895989285,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  5,
+                        "chunks":  84,
+                        "mean":  0.021093455065965827,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  6,
+                        "chunks":  96,
+                        "mean":  0.021084656944253766,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  7,
+                        "chunks":  108,
+                        "mean":  0.02106659933554056,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  8,
+                        "chunks":  120,
+                        "mean":  0.02118811514924346,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  9,
+                        "chunks":  132,
+                        "mean":  0.0209563642079047,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  10,
+                        "chunks":  144,
+                        "mean":  0.02126516833777714,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  11,
+                        "chunks":  156,
+                        "mean":  0.020978094714337203,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  12,
+                        "chunks":  168,
+                        "mean":  0.021162808789540577,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  13,
+                        "chunks":  180,
+                        "mean":  0.021075056436643536,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  14,
+                        "chunks":  192,
+                        "mean":  0.021074716897146573,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  15,
+                        "chunks":  204,
+                        "mean":  0.02111308550558988,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  16,
+                        "chunks":  216,
+                        "mean":  0.021037343732473346,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  17,
+                        "chunks":  228,
+                        "mean":  0.021228595396451055,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  18,
+                        "chunks":  240,
+                        "mean":  0.020939826309472664,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  19,
+                        "chunks":  252,
+                        "mean":  0.021242414515199926,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  20,
+                        "chunks":  264,
+                        "mean":  0.021022891214101946,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  21,
+                        "chunks":  276,
+                        "mean":  0.021125045518601837,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  22,
+                        "chunks":  288,
+                        "mean":  0.021074244337341952,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  23,
+                        "chunks":  300,
+                        "mean":  0.021076806931205283,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  24,
+                        "chunks":  312,
+                        "mean":  0.02114873390280536,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  25,
+                        "chunks":  324,
+                        "mean":  0.020993082171003152,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  26,
+                        "chunks":  336,
+                        "mean":  0.021260671231175365,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  27,
+                        "chunks":  348,
+                        "mean":  0.02094785707504343,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  28,
+                        "chunks":  360,
+                        "mean":  0.02107547741002236,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  29,
+                        "chunks":  372,
+                        "mean":  0.021074575346688107,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  30,
+                        "chunks":  384,
+                        "mean":  0.021113025907766314,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  31,
+                        "chunks":  395,
+                        "mean":  0.021124783279788062,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  32,
+                        "chunks":  407,
+                        "mean":  0.021023664050176194,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  33,
+                        "chunks":  420,
+                        "mean":  0.020939949249850542,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  34,
+                        "chunks":  431,
+                        "mean":  0.02093998241650752,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  35,
+                        "chunks":  443,
+                        "mean":  0.02122952874844941,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  36,
+                        "chunks":  455,
+                        "mean":  0.021084853357137945,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  37,
+                        "chunks":  467,
+                        "mean":  0.021092711272672204,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  38,
+                        "chunks":  479,
+                        "mean":  0.021058857939237896,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  39,
+                        "chunks":  491,
+                        "mean":  0.02120195501515809,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  40,
+                        "chunks":  503,
+                        "mean":  0.020948190437479752,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  41,
+                        "chunks":  515,
+                        "mean":  0.021260761444295895,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  42,
+                        "chunks":  527,
+                        "mean":  0.020992358764488017,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  43,
+                        "chunks":  539,
+                        "mean":  0.021149848503910107,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  44,
+                        "chunks":  551,
+                        "mean":  0.021076736554732634,
+                        "finals":  0,
+                        "partials":  0
+                    },
+                    {
+                        "t":  45,
+                        "chunks":  563,
+                        "mean":  0.000006184088874761073,
+                        "finals":  0,
+                        "partials":  0
+                    }
+                ]
+}

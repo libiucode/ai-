@@ -210,6 +210,10 @@ export interface AnalysisStatus {
   queued: boolean;
   lastRunId: string | null;
   lastRunStatus: AnalysisRunStatus | null;
+  /** LLM 配置态：未配置时本地规则照常运行，不把配置态当运行故障刷屏。 */
+  llm?: "configured" | "not_configured" | "budget_exceeded";
+  /** 同一错误码在会话内只提示一次；UI 据此去重，不再重复弹 callout。 */
+  lastErrorCode?: string | null;
 }
 
 export interface WindowMetrics {
@@ -257,9 +261,9 @@ export interface ReportSummary {
     listenedMs: number;
   };
   asr: {
-    connectionCount: number;
-    disconnectCount: number;
-    gapCount: number;
+    connectionCount: number | null;
+    disconnectCount: number | null;
+    gapCount: number | null;
   };
   issues: {
     total: number;
@@ -288,8 +292,8 @@ export interface ReportSummary {
     longestSilenceMs: number;
   };
   llm: {
-    requestCount: number;
-    failedCount: number;
+    requestCount: number | null;
+    failedCount: number | null;
     estimatedTokens: number;
   };
   analysisRuns: {

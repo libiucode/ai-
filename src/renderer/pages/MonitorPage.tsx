@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { Issue, TranscriptSegment } from "../../shared/contracts";
 import { PHASE_LABEL } from "../../shared/contracts";
 import {
@@ -23,6 +23,19 @@ interface DeviceOption {
   isDefault: boolean;
 }
 
+/**
+ * 无声警告阈值。
+ * level 是采集侧每帧样本的平均绝对值：室内底噪约 0.001–0.003，正常人声 0.02 以上。
+ * 0.005 作为"算有声音"的门槛，留了底噪裕量又不至于漏掉小声说话。
+ */
+const SILENCE_LEVEL_THRESHOLD = 0.005;
+/** 连续无声多久后报警。 */
+const SILENCE_WARN_MS = 5000;
+/** 只有这些状态下无声才值得报警：采集在跑、本该有声音。
+ *  paused 不报警（采集已主动停止，无声是预期）；
+ *  starting/stopping/idle/completed/error 也不报（没有在监听）。 */
+const LISTENING_STATES = ["capturing", "reconnecting", "analyzing"];
+
 export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   const mon = useMonitorState();
   const [devices, setDevices] = useState<DeviceOption[]>([]);
@@ -30,13 +43,46 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   const [level, setLevel] = useState(0);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const captureRef = useRef<CaptureHandle | null>(null);
+  const actionInFlight = useRef(false);
+  const [actionPending, setActionPending] = useState(false);
   const [now, setNow] = useState(Date.now());
   const transcriptRef = useRef<HTMLDivElement | null>(null);
+  /** 连续无声警告状态。见 silenceTick() 注释。 */
+  const [silenceWarning, setSilenceWarning] = useState(false);
+  const lastLoudRef = useRef<number>(0);
 
   // 1s heartbeat for countdown + duration display
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  /**
+   * 无声检测。电平回调 onLevel 每音频帧（约 85ms）触发一次，
+   * 这里用 1s 定时器比较"最后一次听到声音"到现在的间隔。
+   * 只在 LISTENING_STATES 内判定：暂停时采集已停，不报警；
+   * 声音恢复（level 超阈值）立即清除警告。
+   */
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!LISTENING_STATES.includes(mon.sessionState)) {
+        if (silenceWarning) setSilenceWarning(false);
+        return;
+      }
+      const quietFor = Date.now() - lastLoudRef.current;
+      const isQuiet = quietFor >= SILENCE_WARN_MS;
+      if (isQuiet !== silenceWarning) setSilenceWarning(isQuiet);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [mon.sessionState, silenceWarning]);
+
+  /** 电平回调：记录最后一次"有声"时刻；声音一恢复立刻解除警告。 */
+  const handleLevel = useCallback((l: number) => {
+    setLevel(l);
+    if (l >= SILENCE_LEVEL_THRESHOLD) {
+      lastLoudRef.current = Date.now();
+      setSilenceWarning((w) => (w ? false : w));
+    }
   }, []);
 
   // refresh device list when idle and after permission grant
@@ -60,26 +106,45 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
 
   useEffect(() => {
     if (transcriptRef.current) transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-  }, [mon.finals.length, mon.partials.length]);
+  }, [mon.finals, mon.partials]);
+
+  async function performAction(action: () => Promise<void>) {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setActionPending(true);
+    try {
+      await action();
+    } catch (err) {
+      setCaptureError(err instanceof Error ? err.message : "操作失败，请重试");
+    } finally {
+      actionInFlight.current = false;
+      setActionPending(false);
+    }
+  }
 
   async function doStart(source: "microphone" | "systemLoopback") {
     setCaptureError(null);
-    const onLevel = (l: number) => setLevel(l);
+    lastLoudRef.current = Date.now();
     let result;
     if (source === "microphone") {
-      result = await startMicCapture(deviceId, onLevel, handleCaptureEnded);
+      result = await startMicCapture(deviceId, handleLevel, handleCaptureEnded);
     } else {
-      result = await startLoopbackCapture(onLevel, handleCaptureEnded);
+      result = await startLoopbackCapture(handleLevel, handleCaptureEnded);
     }
     if (!result.ok) {
       setCaptureError(result.error.message);
       return;
     }
     captureRef.current = result.handle;
-    await mon.startSession({
+    const started = await mon.startSession({
       audioSource: source,
       deviceId: source === "microphone" ? deviceId : null,
     });
+    if (!started) {
+      captureRef.current?.stop();
+      captureRef.current = null;
+      setLevel(0);
+    }
   }
 
   // 采集轨道静默死亡（设备拔出/被独占/音频服务重启导致哈希变化）：
@@ -99,6 +164,7 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     captureRef.current?.stop();
     captureRef.current = null;
     setLevel(0);
+    setSilenceWarning(false);
     await mon.stopSession();
   }
 
@@ -108,13 +174,18 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     captureRef.current?.stop();
     captureRef.current = null;
     setLevel(0);
+    setSilenceWarning(false);
     await mon.pauseSession();
   }
 
   // 恢复 = 真重开：先重启采集（设备可能已在暂停期间失效），再通知主进程重连 ASR。
   async function doResume() {
     setCaptureError(null);
-    const cap = await startMicCapture(deviceId, (l) => setLevel(l), handleCaptureEnded);
+    lastLoudRef.current = Date.now();
+    setSilenceWarning(false);
+    const cap = mon.audio?.source === "systemLoopback"
+      ? await startLoopbackCapture(handleLevel, handleCaptureEnded)
+      : await startMicCapture(deviceId, handleLevel, handleCaptureEnded);
     if (!cap.ok) {
       // 采集起不来就别恢复会话——让用户看到原因（设备失效/被占用）
       setCaptureError(cap.error.message);
@@ -174,23 +245,23 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
                   className="input select"
                   value={deviceId ?? ""}
                   onChange={(e) => setDeviceId(e.target.value || null)}
-                  disabled={active}
+                  disabled={active || actionPending}
                 >
                   <option value="">默认麦克风</option>
                   {devices.map((d) => (
                     <option key={d.id} value={d.id}>{d.label}</option>
                   ))}
                 </select>
-                <Button variant="primary" onClick={() => doStart("microphone")}>开始麦克风监听</Button>
-                <Button onClick={() => doStart("systemLoopback")}>监听系统声音</Button>
+                <Button variant="primary" disabled={actionPending} onClick={() => performAction(() => doStart("microphone"))}>开始麦克风监听</Button>
+                <Button disabled={actionPending} onClick={() => performAction(() => doStart("systemLoopback"))}>监听系统声音</Button>
               </>
             ) : null}
             {mon.sessionState === "paused" ? (
-              <Button variant="primary" onClick={doResume}>继续</Button>
+              <Button variant="primary" disabled={actionPending} onClick={() => performAction(doResume)}>继续</Button>
             ) : null}
-            {active ? <Button onClick={doPause}>暂停</Button> : null}
+            {active ? <Button disabled={actionPending} onClick={() => performAction(doPause)}>暂停</Button> : null}
             {active || mon.sessionState === "paused" ? (
-              <Button variant="danger" onClick={doStop}>结束</Button>
+              <Button variant="danger" disabled={actionPending} onClick={() => performAction(doStop)}>结束</Button>
             ) : null}
             {mon.sessionState === "completed" ? (
               <Button variant="primary" onClick={onOpenHistory}>查看历史与报告</Button>
@@ -215,6 +286,13 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
         </div>
 
         {captureError ? <div className="callout callout-danger">{captureError}</div> : null}
+        {silenceWarning ? (
+          <div className="callout callout-warn">
+            ⚠ 已连续 {SILENCE_WARN_MS / 1000} 秒没有检测到输入声音。请检查：麦克风是否被静音或音量过低、
+            系统声音采集是否选错了共享目标（需要勾选“分享音频”）、播放设备是否正常运行。
+            声音恢复后此提示会自动消失。
+          </div>
+        ) : null}
         {mon.hasTranscriptGap ? (
           <div className="callout callout-warn">
             ⚠ ASR 曾断线重连，断线期间存在转写缺口，缺口内没有字幕数据。

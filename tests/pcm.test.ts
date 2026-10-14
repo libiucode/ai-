@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PcmResamplerSlicer, PACKET_SAMPLES } from "../src/main/capture/pcm";
+import { BoundedPacketQueue, PcmResamplerSlicer, PACKET_SAMPLES, PACKET_MS } from "../src/main/capture/pcm";
 
 /** 生成指定频率的正弦波（Float32 mono） */
 function sine(rate: number, freq: number, seconds: number): Float32Array {
@@ -81,5 +81,77 @@ describe("PCM 重采样切片器（任意源速率 → 16k）", () => {
     // 输入 10×4096@48k → 13650 个 16k 样本。修复前每次成包把残余清零
     // （丢 ~895 样本/次），只发出 9600；修复后保留残余，至少发 4 包 = 12800
     expect(emitted).toBeGreaterThanOrEqual(12800);
+  });
+});
+
+/**
+ * 有界队列边界。2026-10-14 实测发现两个问题：
+ * 1. 溢出时只丢一包就停，一次 push 后占用字节仍可能越过上限；
+ * 2. 单包体积超过上限时，旧实现先 shift 一包再把这个超大包塞进去，
+ *    上限完全失效（上限 1000B 收 5000B 包 → 占用 5000B）。
+ */
+describe("BoundedPacketQueue 上限与溢出策略", () => {
+  const pkt = (startMs: number, bytes = 6400) => ({ pcm: new ArrayBuffer(bytes), startMs, durationMs: PACKET_MS });
+
+  it("未满时不溢出，满了丢最旧并计数", () => {
+    const q = new BoundedPacketQueue(6400 * 3);
+    for (let i = 0; i < 3; i++) q.push(pkt(i));
+    expect(q.size).toBe(3);
+    expect(q.overflowCount).toBe(0);
+    expect(q.rejectedCount).toBe(0);
+    const ok = q.push(pkt(3));
+    expect(ok).toBe(true);
+    expect(q.overflowCount).toBe(1);
+    expect(q.size).toBe(3);
+    const drained = q.drain();
+    // 丢的是最旧的
+    expect(drained[0].startMs).toBe(1);
+    expect(drained[2].startMs).toBe(3);
+  });
+
+  it("溢出后占用字节不越过上限", () => {
+    const q = new BoundedPacketQueue(6400 * 3);
+    for (let i = 0; i < 10; i++) q.push(pkt(i));
+    expect(q.bytes).toBeLessThanOrEqual(6400 * 3);
+    // 连续丢到放得下为止，而不是只丢一包
+    expect(q.overflowCount).toBe(7);
+  });
+
+  it("单包超过上限时拒绝入队且不破坏上限", () => {
+    const q = new BoundedPacketQueue(1000);
+    const ok = q.push(pkt(0, 5000));
+    expect(ok).toBe(false);
+    expect(q.rejectedCount).toBe(1);
+    expect(q.overflowCount).toBe(0);
+    expect(q.size).toBe(0);
+    expect(q.bytes).toBe(0);
+  });
+
+  it("被拒绝后仍能继续收正常包（不被永久堵死）", () => {
+    const q = new BoundedPacketQueue(6400);
+    expect(q.push(pkt(0, 99999))).toBe(false);
+    expect(q.push(pkt(1, 6400))).toBe(true);
+    expect(q.size).toBe(1);
+    expect(q.bytes).toBe(6400);
+  });
+
+  it("onOverflow 与 onReject 回调分别触发", () => {
+    const overflows: number[] = [];
+    const rejects: number[] = [];
+    const q = new BoundedPacketQueue(6400, (c) => overflows.push(c), (c) => rejects.push(c));
+    q.push(pkt(0, 6400));
+    q.push(pkt(1, 6400)); // 溢出
+    q.push(pkt(2, 99999)); // 超大包拒绝
+    expect(overflows).toEqual([1]);
+    expect(rejects).toEqual([1]);
+  });
+
+  it("默认上限是 10 秒 16kHz 16bit 单声道", () => {
+    const q = new BoundedPacketQueue();
+    // 一个 200ms 包 = 3200 样本 × 2 字节 = 6400B；10s = 50 包
+    for (let i = 0; i < 60; i++) q.push(pkt(i));
+    expect(q.size).toBe(50);
+    expect(q.overflowCount).toBe(10);
+    expect(q.bytes).toBe(320000);
   });
 });

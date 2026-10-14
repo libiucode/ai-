@@ -54,20 +54,23 @@ export function parseTencentMessage(raw: string): {
   if (!result || typeof result !== "object") return { type: "ignore" };
 
   const voiceId = typeof m.voice_id === "string" ? m.voice_id : "";
-  const seq = typeof result.slice_seq === "number" ? result.slice_seq : 0;
-  const text = typeof result.result_text === "string" ? result.result_text : "";
+  const seq = typeof result.index === "number" ? result.index : 0;
+  const text = typeof result.voice_text_str === "string" ? result.voice_text_str : "";
   const sliceType = typeof result.slice_type === "number" ? result.slice_type : 0;
+  // 腾讯云文档：start_time/end_time 是"当前一段话结果在整个音频流中的起止时间"，
+  // 即该连接内已送入音频的相对时间。audio_duration 是服务端累计收到的音频时长，
+  // 只用于判断连接是否还有新音频，不能用来反推片段起止——反推会把
+  // "上一句的结束时间"错当成"本句起点"，长时间直播下时间戳整体漂移。
+  // 2026-10-14 联调结论：最终结果直接透传 start_time/end_time。
   const startMs = typeof result.start_time === "number" ? result.start_time : 0;
   const endMs = typeof result.end_time === "number" ? result.end_time : 0;
-  const audioDuration =
-    typeof m.audio_duration === "number" ? m.audio_duration : 0;
 
   return {
     type: sliceType === 2 ? "final" : "partial",
     seq,
     text,
-    startMs: audioDuration > 0 ? Math.max(0, audioDuration - (endMs - startMs)) : startMs,
-    endMs: audioDuration > 0 ? audioDuration : endMs,
+    startMs,
+    endMs,
     voiceId,
     sliceType,
     offsetStartMs: startMs,
@@ -86,6 +89,8 @@ export class TencentAsrAdapter implements AsrAdapter {
   private url: string | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private lastSeqSeen = -1;
+  private lastFinalSeq = -1;
+  private lastPartialKey: string | null = null;
 
   getConnectionId(): string | null {
     return this.connectionId;
@@ -96,6 +101,13 @@ export class TencentAsrAdapter implements AsrAdapter {
     if (!parsed.success) {
       throw makeError("ASR_CONFIG_INVALID", "ASR 配置校验失败", false);
     }
+    // Explicitly replacing a connection must retire its socket and retry timer.
+    this.shouldRun = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const previous = this.ws;
+    this.ws = null;
+    previous?.terminate();
     this.config = parsed.data;
     this.shouldRun = true;
     this.reconnectAttempt = 0;
@@ -141,6 +153,8 @@ export class TencentAsrAdapter implements AsrAdapter {
     this.voiceId = crypto.randomUUID();
     this.connectionId = crypto.randomUUID();
     this.lastSeqSeen = -1;
+    this.lastFinalSeq = -1;
+    this.lastPartialKey = null;
 
     const { url } = buildTencentAsrUrl({
       appId: this.config.appId,
@@ -160,12 +174,17 @@ export class TencentAsrAdapter implements AsrAdapter {
 
     return new Promise((resolve, reject) => {
       let settled = false;
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(url, { handshakeTimeout: 10000 });
       this.ws = ws;
+      this.emit("status", { state: "connecting", connectionId: this.connectionId });
 
       ws.on("open", () => {
+        if (this.ws !== ws || !this.shouldRun) {
+          ws.terminate();
+          return;
+        }
         this.reconnectAttempt = 0;
-        this.emit("status", { state: "connected", connectionId: this.connectionId });
+        this.emit("status", { state: "connected", connectionId: this.connectionId, reconnectAttempt: 0, lastError: null });
         if (!settled) {
           settled = true;
           resolve();
@@ -173,16 +192,18 @@ export class TencentAsrAdapter implements AsrAdapter {
       });
 
       ws.on("message", (data) => {
+        if (this.ws !== ws) return;
         this.handleMessage(String(data));
       });
 
       ws.on("error", (err) => {
+        if (this.ws !== ws) return;
         const error = makeError(
           "ASR_WS_ERROR",
           `ASR WebSocket 错误: ${err.message}`,
           true,
         );
-        this.emit("error", { error } satisfies AsrErrorPayload);
+        if (this.shouldRun) this.emit("error", { error } satisfies AsrErrorPayload);
         if (!settled) {
           settled = true;
           reject(error);
@@ -190,13 +211,19 @@ export class TencentAsrAdapter implements AsrAdapter {
       });
 
       ws.on("close", () => {
-        this.ws = null;
-        this.emit("status", { state: this.shouldRun ? "reconnecting" : "closed" });
         if (!settled) {
           settled = true;
           reject(makeError("ASR_WS_CLOSED", "ASR 连接被关闭", true));
-          return;
         }
+        if (this.ws !== ws) return;
+        this.ws = null;
+        // 主动断开/掉线：标记转写缺口。orchestrator 会把这个标记透传给 UI 与
+        // SessionSummary.hasGap，让用户知道这段时间没有转写，而不是让旧字幕
+        // 冒充最新结果。方案第 16 节验收标准第 6 条要求断线有明确状态。
+        this.emit("status", {
+          state: this.shouldRun ? "reconnecting" : "closed",
+          gapDetected: true,
+        });
         if (this.shouldRun) this.scheduleReconnect();
       });
     });
@@ -204,13 +231,19 @@ export class TencentAsrAdapter implements AsrAdapter {
 
   private scheduleReconnect() {
     if (!this.shouldRun) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     const delay = Math.min(
       RECONNECT_BASE_MS * 2 ** this.reconnectAttempt,
       RECONNECT_MAX_MS,
     );
     this.reconnectAttempt++;
-    this.emit("status", { state: "reconnecting", reconnectAttempt: this.reconnectAttempt });
+    this.emit("status", {
+      state: "reconnecting",
+      reconnectAttempt: this.reconnectAttempt,
+      gapDetected: true,
+    });
     this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
       if (!this.shouldRun) return;
       try {
         await this.openNewConnection();
@@ -234,11 +267,17 @@ export class TencentAsrAdapter implements AsrAdapter {
       return;
     }
     if (parsed.type === "ignore") return;
+    // Tencent's index identifies a sentence, not a message: multiple partials
+    // and the final all share it. Ignore stale/finalized sentences and exact
+    // partial repeats, while allowing revisions and partial -> final promotion.
+    if (!parsed.text?.trim()) return;
     const seq = parsed.seq ?? 0;
-    if (seq <= this.lastSeqSeen) return; // dedupe repeats
+    if (seq < this.lastSeqSeen || seq <= this.lastFinalSeq) return;
     this.lastSeqSeen = seq;
 
     if (parsed.type === "final") {
+      this.lastFinalSeq = seq;
+      this.lastPartialKey = null;
       this.emit("final", {
         connectionId: this.connectionId,
         sourceSeq: seq,
@@ -248,6 +287,9 @@ export class TencentAsrAdapter implements AsrAdapter {
         voiceId: parsed.voiceId ?? "",
       } satisfies AsrFinalPayload);
     } else {
+      const key = JSON.stringify([seq, parsed.text, parsed.startMs, parsed.endMs]);
+      if (key === this.lastPartialKey) return;
+      this.lastPartialKey = key;
       this.emit("partial", {
         connectionId: this.connectionId,
         sourceSeq: seq,
@@ -278,22 +320,30 @@ export class TencentAsrAdapter implements AsrAdapter {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     const ws = this.ws;
-    if (!ws) return;
+    if (!ws || ws.readyState === WebSocket.CLOSED) return;
     return new Promise((resolve) => {
-      ws.once("close", () => resolve());
-      try {
-        ws.send(JSON.stringify({ type: "end" }));
-      } catch {
-        /* ignore */
-      }
-      setTimeout(() => {
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
-        resolve();
+      const timer = setTimeout(() => {
+        try { ws.terminate(); } catch { /* best effort */ }
+        finish();
       }, 2000);
+      const finish = () => {
+        clearTimeout(timer);
+        ws.removeListener("close", finish);
+        if (this.ws === ws) this.ws = null;
+        resolve();
+      };
+      ws.once("close", finish);
+      try {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "end" }));
+        } else {
+          // A handshake has no audio to finalize; terminate it immediately.
+          ws.terminate();
+        }
+      } catch {
+        try { ws.terminate(); } catch { /* best effort */ }
+        finish();
+      }
     });
   }
 

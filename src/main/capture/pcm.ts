@@ -1,4 +1,4 @@
-﻿import type { AudioStatus } from "../../shared/contracts";
+import type { AudioStatus } from "../../shared/contracts";
 
 export interface AudioPacket {
   /** 16kHz 16-bit mono PCM */
@@ -26,15 +26,26 @@ export class BoundedPacketQueue {
   private queue: AudioPacket[] = [];
   private totalBytes = 0;
   overflowCount = 0;
+  /** 因单包体积超过上限而被拒绝的包数（与 overflowCount 分开计数）。 */
+  rejectedCount = 0;
 
   constructor(
     private maxBytes: number = MAX_QUEUE_BYTES,
     private onOverflow?: (count: number) => void,
+    private onReject?: (count: number) => void,
   ) {}
 
   push(packet: AudioPacket): boolean {
-    if (this.totalBytes + packet.pcm.byteLength > this.maxBytes) {
-      // drop oldest
+    // 单包就超过上限：旧的实现是先 shift 掉一包再把这个超大包塞进去，
+    // 结果 totalBytes 仍然远超 maxBytes，上限形同虚设（实测：上限 1000B、
+    // 推 5000B 包后 totalBytes=5000）。这里改为直接拒绝并计数，不破坏上限。
+    if (packet.pcm.byteLength > this.maxBytes) {
+      this.rejectedCount++;
+      this.onReject?.(this.rejectedCount);
+      return false;
+    }
+    // 满了丢最旧，腾出空间。要连续丢弃直到放得下，否则一次 push 仍可能越过上限。
+    while (this.totalBytes + packet.pcm.byteLength > this.maxBytes && this.queue.length > 0) {
       const dropped = this.queue.shift();
       if (dropped) this.totalBytes -= dropped.pcm.byteLength;
       this.overflowCount++;
@@ -54,6 +65,11 @@ export class BoundedPacketQueue {
 
   get size(): number {
     return this.queue.length;
+  }
+
+  /** 当前占用字节数。用于断言「上限在任何输入下都不被突破」。 */
+  get bytes(): number {
+    return this.totalBytes;
   }
 }
 
@@ -78,6 +94,17 @@ export class PcmResamplerSlicer {
   reset(startMs: number) {
     this.buffered = 0;
     this.nextStartMs = startMs;
+  }
+
+  /** Emit the remaining samples when capture pauses or ends. */
+  flush(): AudioPacket | null {
+    if (!this.buffered) return null;
+    const pcm = this.ringBuffer.slice(0, this.buffered);
+    const durationMs = this.buffered * 1000 / SAMPLE_RATE;
+    const packet = { pcm: pcm.buffer, startMs: this.nextStartMs, durationMs };
+    this.nextStartMs += durationMs;
+    this.buffered = 0;
+    return packet;
   }
 
   /** input: mono-mixed Float32 samples at sourceRate */

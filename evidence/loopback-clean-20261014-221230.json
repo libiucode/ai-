@@ -1,0 +1,20 @@
+﻿{
+    "at":  "2026-10-14T22:13:00.6509361+08:00",
+    "final":  {
+                  "chunkCount":  0,
+                  "errors":  [
+
+                             ]
+              },
+    "console":  [
+
+                ],
+    "buttonClick":  {
+                        "x":  1157,
+                        "y":  53.75,
+                        "text":  "监听系统声音",
+                        "disabled":  false
+                    },
+    "kind":  "loopback-clean-with-console",
+    "chunkFile":  "D:\\ai盯播工具\\app\\evidence\\loopback-clean-chunks-20261014-221230.json"
+}

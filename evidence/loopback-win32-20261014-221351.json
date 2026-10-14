@@ -1,0 +1,21 @@
+﻿{
+    "console":  [
+                    {
+
+                    }
+                ],
+    "kind":  "loopback-win32-click",
+    "final":  {
+                  "chunkCount":  0,
+                  "errors":  [
+
+                             ]
+              },
+    "buttonClick":  {
+                        "x":  1028,
+                        "y":  53.75,
+                        "text":  "监听系统声音",
+                        "disabled":  false
+                    },
+    "at":  "2026-10-14T22:14:08.8472382+08:00"
+}

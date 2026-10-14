@@ -1,0 +1,583 @@
+﻿{
+    "firstFinalAtSecond":  11,
+    "console":  [
+                    {
+
+                    }
+                ],
+    "kind":  "level1-known-signal",
+    "ui":  {
+               "finalCount":  7,
+               "partialCount":  0,
+               "timer":  "01:22",
+               "sessionId":  "ae85dc7c",
+               "asrChip":  "ASR识别中",
+               "lastFinalChip":  "最后稳态1 秒前",
+               "callouts":  [
+
+                            ],
+               "subtitleCandidates":  [
+                                          "AI 盯播工具直播话术实时质检",
+                                          "AI 盯播工具直播话术实时质检",
+                                          "AI 盯播工具",
+                                          "直播话术实时质检",
+                                          "监听中会话 ae85dc7c开始于 22:37:42音源 系统声音暂停结束",
+                                          "监听中",
+                                          "ASR识别中",
+                                          "ASR",
+                                          "[ANALYSIS_LLM_FAILED] LLM 分析失败: LLM_NOT_CONFIGURED: LLM 未配置",
+                                          "[ANALYSIS_LLM_FAILED] LLM 分析失败: LLM_NOT_CONFIGURED: LLM 未配置",
+                                          "临时字幕为识别中间结果（灰色斜体），不落库；稳态字幕为已定稿内容。",
+                                          "00:04大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。稳态 #0",
+                                          "00:04",
+                                          "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。",
+                                          "稳态 #0",
+                                          "00:13家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。稳态 #1",
+                                          "00:13",
+                                          "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。",
+                                          "稳态 #1",
+                                          "00:25这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明显提亮。这个是实测数据。稳态 #2"
+                                      ],
+               "lastFinalText":  "暂无问题。分析窗口完成后，新问题会出现在这里。"
+           },
+    "at":  "2026-10-14T22:39:06.4186105+08:00",
+    "level":  {
+                  "chunkCount":  0,
+                  "errors":  [
+
+                             ]
+              },
+    "port":  9223,
+    "playback":  {
+                     "isLiveStream":  false,
+                     "seconds":  75,
+                     "source":  "D:\\asrbench-audio\\merged.wav"
+                 },
+    "samples":  [
+                    {
+                        "t":  1,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:04"
+                    },
+                    {
+                        "t":  2,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:05"
+                    },
+                    {
+                        "t":  3,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:06"
+                    },
+                    {
+                        "t":  4,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:07"
+                    },
+                    {
+                        "t":  5,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:08"
+                    },
+                    {
+                        "t":  6,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:09"
+                    },
+                    {
+                        "t":  7,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:10"
+                    },
+                    {
+                        "t":  8,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:11"
+                    },
+                    {
+                        "t":  9,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:12"
+                    },
+                    {
+                        "t":  10,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  0,
+                        "timer":  "00:13"
+                    },
+                    {
+                        "t":  11,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:14"
+                    },
+                    {
+                        "t":  12,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:15"
+                    },
+                    {
+                        "t":  13,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:16"
+                    },
+                    {
+                        "t":  14,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:17"
+                    },
+                    {
+                        "t":  15,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:18"
+                    },
+                    {
+                        "t":  16,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:19"
+                    },
+                    {
+                        "t":  17,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:20"
+                    },
+                    {
+                        "t":  18,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:21"
+                    },
+                    {
+                        "t":  19,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:22"
+                    },
+                    {
+                        "t":  20,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:23"
+                    },
+                    {
+                        "t":  21,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  1,
+                        "timer":  "00:24"
+                    },
+                    {
+                        "t":  22,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:26"
+                    },
+                    {
+                        "t":  23,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:27"
+                    },
+                    {
+                        "t":  24,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:28"
+                    },
+                    {
+                        "t":  25,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:29"
+                    },
+                    {
+                        "t":  26,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:30"
+                    },
+                    {
+                        "t":  27,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:31"
+                    },
+                    {
+                        "t":  28,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:32"
+                    },
+                    {
+                        "t":  29,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:33"
+                    },
+                    {
+                        "t":  30,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:34"
+                    },
+                    {
+                        "t":  31,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:35"
+                    },
+                    {
+                        "t":  32,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:36"
+                    },
+                    {
+                        "t":  33,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  2,
+                        "timer":  "00:37"
+                    },
+                    {
+                        "t":  34,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:38"
+                    },
+                    {
+                        "t":  35,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:39"
+                    },
+                    {
+                        "t":  36,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:40"
+                    },
+                    {
+                        "t":  37,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:41"
+                    },
+                    {
+                        "t":  38,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:42"
+                    },
+                    {
+                        "t":  39,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:43"
+                    },
+                    {
+                        "t":  40,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:44"
+                    },
+                    {
+                        "t":  41,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:45"
+                    },
+                    {
+                        "t":  42,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  3,
+                        "timer":  "00:46"
+                    },
+                    {
+                        "t":  43,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:47"
+                    },
+                    {
+                        "t":  44,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:48"
+                    },
+                    {
+                        "t":  45,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:49"
+                    },
+                    {
+                        "t":  46,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:50"
+                    },
+                    {
+                        "t":  47,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:51"
+                    },
+                    {
+                        "t":  48,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:52"
+                    },
+                    {
+                        "t":  49,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:53"
+                    },
+                    {
+                        "t":  50,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:54"
+                    },
+                    {
+                        "t":  51,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:55"
+                    },
+                    {
+                        "t":  52,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  4,
+                        "timer":  "00:56"
+                    },
+                    {
+                        "t":  53,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "00:57"
+                    },
+                    {
+                        "t":  54,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "00:58"
+                    },
+                    {
+                        "t":  55,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "00:59"
+                    },
+                    {
+                        "t":  56,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:00"
+                    },
+                    {
+                        "t":  57,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:01"
+                    },
+                    {
+                        "t":  58,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:02"
+                    },
+                    {
+                        "t":  59,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:03"
+                    },
+                    {
+                        "t":  60,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:04"
+                    },
+                    {
+                        "t":  61,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:05"
+                    },
+                    {
+                        "t":  62,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:06"
+                    },
+                    {
+                        "t":  63,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:07"
+                    },
+                    {
+                        "t":  64,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  5,
+                        "timer":  "01:08"
+                    },
+                    {
+                        "t":  65,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:09"
+                    },
+                    {
+                        "t":  66,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:10"
+                    },
+                    {
+                        "t":  67,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:11"
+                    },
+                    {
+                        "t":  68,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:13"
+                    },
+                    {
+                        "t":  69,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:14"
+                    },
+                    {
+                        "t":  70,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:15"
+                    },
+                    {
+                        "t":  71,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:16"
+                    },
+                    {
+                        "t":  72,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:17"
+                    },
+                    {
+                        "t":  73,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:18"
+                    },
+                    {
+                        "t":  74,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:19"
+                    },
+                    {
+                        "t":  75,
+                        "chunks":  0,
+                        "mean":  null,
+                        "finals":  6,
+                        "timer":  "01:20"
+                    }
+                ]
+}

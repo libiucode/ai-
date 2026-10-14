@@ -46,22 +46,22 @@ describe("fixture: asr-partial-final（模拟数据）", () => {
 });
 
 describe("fixture: asr-reconnect（模拟数据）", () => {
-  it("重连后新连接 seq 从 1 计数，不与旧连接去重冲突", () => {
+  it("重连后新连接 index 从 0 计数，不与旧连接去重冲突", () => {
     const fixture = fx("asr-reconnect.json");
     const adapter = new TencentAsrAdapter();
     const finals: AsrFinalPayload[] = [];
     adapter.on("final", (p) => finals.push(p as AsrFinalPayload));
 
-    // simulate: adapter.lastSeqSeen resets per connection (openNewConnection sets -1)
-    // feed connA final seq=1
+    // Simulate the per-connection state reset in openNewConnection.
+    // Feed connA final index=0.
     (adapter as unknown as { connectionId: string }).connectionId = fixture.connectionA.connectionId;
-    (adapter as unknown as { lastSeqSeen: number }).lastSeqSeen = -1;
+    Object.assign(adapter, { lastSeqSeen: -1, lastFinalSeq: -1, lastPartialKey: null });
     for (const m of fixture.connectionA.messages) {
       (adapter as unknown as { handleMessage: (r: string) => void }).handleMessage(m.raw);
     }
     // simulate reconnect: new connection id, seq counter reset
     (adapter as unknown as { connectionId: string }).connectionId = fixture.connectionB.connectionId;
-    (adapter as unknown as { lastSeqSeen: number }).lastSeqSeen = -1;
+    Object.assign(adapter, { lastSeqSeen: -1, lastFinalSeq: -1, lastPartialKey: null });
     for (const m of fixture.connectionB.messages) {
       (adapter as unknown as { handleMessage: (r: string) => void }).handleMessage(m.raw);
     }
@@ -69,8 +69,8 @@ describe("fixture: asr-reconnect（模拟数据）", () => {
     expect(finals[0].connectionId).toBe("conn-A");
     expect(finals[1].connectionId).toBe("conn-B");
     // seq can repeat across connections
-    expect(finals[0].sourceSeq).toBe(1);
-    expect(finals[1].sourceSeq).toBe(1);
+    expect(finals[0].sourceSeq).toBe(0);
+    expect(finals[1].sourceSeq).toBe(0);
   });
 
   it("错误消息(code!=0) 不产生转写，产生 error", () => {
@@ -160,7 +160,8 @@ describe("话术循环状态机", () => {
 
 describe("Prompt 防伪造约束", () => {
   it("核心 Prompt 明确要求引用原文子串", () => {
-    expect(CORE_PROMPT).toContain("quote 必须是对应片段原文的连续子串");
-    expect(CORE_PROMPT).toContain("不引用不存在的原话");
+    expect(CORE_PROMPT).toMatch(/quote.*(?:某一个|单个).*片段.*连续子串/);
+    expect(CORE_PROMPT).toContain("禁止改数字、拼接多段、引用摘要");
+    expect(CORE_PROMPT).toContain("segmentIds必须存在于输入");
   });
 });

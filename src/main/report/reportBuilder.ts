@@ -108,9 +108,11 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       listenedMs,
     },
     asr: {
-      connectionCount: runStats.total,
-      disconnectCount: runStats.failed,
-      gapCount: runStats.failed,
+      // ASR connection/gap events are not persisted yet. Analysis runs cannot
+      // serve as a proxy; null explicitly means unmeasured, never zero.
+      connectionCount: null,
+      disconnectCount: null,
+      gapCount: null,
     },
     issues: {
       total: issues.length,
@@ -130,8 +132,8 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       longestSilenceMs: Math.round(metrics.longestSilenceMs),
     },
     llm: {
-      requestCount: runStats.total,
-      failedCount: runStats.failed,
+      requestCount: null,
+      failedCount: null,
       estimatedTokens: estimateTokens(metrics.chineseChars, metrics.englishWords),
     },
     analysisRuns: runStats,
@@ -264,8 +266,8 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
 <h2>问题概览</h2>
 <p class="kv">共 ${report.issues.total} 条：已确认 ${report.issues.confirmed}，需人工核查 ${report.issues.needsReview}。
 分布（严重 ${bySev(report, "critical")} / 警告 ${bySev(report, "warning")} / 提示 ${bySev(report, "info")}）。
-LLM 请求 ${report.llm.requestCount} 次（失败 ${report.llm.failedCount}），分析运行 ${report.analysisRuns.total} 次（失败 ${report.analysisRuns.failed}）。
-转写缺口 ${report.asr.gapCount} 次。估算 token ${report.llm.estimatedTokens}。</p>
+LLM 实际请求次数与失败次数未统计；分析运行 ${report.analysisRuns.total} 次（失败 ${report.analysisRuns.failed}）。
+ASR 连接、断线与转写缺口未统计。转写文本估算 token ${report.llm.estimatedTokens}（不是服务商实际计费量）。</p>
 
 <h2>问题时间轴</h2>
 <table>
@@ -274,11 +276,12 @@ LLM 请求 ${report.llm.requestCount} 次（失败 ${report.llm.failedCount}）�
 </table>
 
 <h2>话术指标</h2>
+<p class="kv">语速分子为中文字数加英文词数；讲话语速除以有效讲话分钟，总时长语速除以分析覆盖时段的总分钟。</p>
 <table>
 <tbody>
 <tr><th>有效讲话</th><td>${formatMs(report.metrics.speechMs)}</td><th>静音</th><td>${formatMs(report.metrics.silenceMs)}</td></tr>
 <tr><th>中文字数</th><td>${report.metrics.chineseChars}</td><th>英文词数</th><td>${report.metrics.englishWords}</td></tr>
-<tr><th>语速（按讲话）</th><td>${report.metrics.charsPerSpeechMinute} 字/分</td><th>语速（按总时长）</th><td>${report.metrics.charsPerTotalMinute} 字/分</td></tr>
+<tr><th>语速（按讲话）</th><td>${report.metrics.charsPerSpeechMinute} 字词/分</td><th>语速（按总时长）</th><td>${report.metrics.charsPerTotalMinute} 字词/分</td></tr>
 <tr><th>最长静音</th><td>${formatMs(report.metrics.longestSilenceMs)}</td><th></th><td></td></tr>
 </tbody>
 </table>

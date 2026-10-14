@@ -155,8 +155,8 @@ export class Store {
   querySpeechIntervals(sessionId: string, startMs: number, endMs: number): SpeechInterval[] {
     return this.db
       .prepare(
-        `SELECT id, session_id, start_ms, end_ms FROM speech_intervals
-         WHERE session_id = ? AND end_ms > ? AND start_ms < ? ORDER BY start_ms`,
+        `SELECT id, session_id AS sessionId, start_ms AS startMs, end_ms AS endMs
+         FROM speech_intervals WHERE session_id = ? AND end_ms > ? AND start_ms < ? ORDER BY start_ms`,
       )
       .all(sessionId, startMs, endMs) as SpeechInterval[];
   }

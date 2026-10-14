@@ -1,0 +1,27 @@
+{
+  "simulated": true,
+  "description": "模拟直播电商话术模板。商品及事实为测试夹具；真实直播前请按商家已核实资料替换并保存。",
+  "framework": {
+    "id": "demo-vacuum-cup-500ml",
+    "name": "保温杯讲解一轮（模拟商品资料）",
+    "productFacts": "【模拟资料，不代表真实在售商品；不得直接用于真实宣传】\n商品：清晨500mL保温杯（虚构演示型号）。\n材质：演示说明书标注内胆304不锈钢，外壳喷涂不锈钢。\n容量：500mL，颜色：米白、深蓝。\n使用条件：首次使用前清洗；热饮装入时留出杯口空间，确认杯盖旋紧；不要盛装干冰或强酸强碱。\n价格：演示到手价99元，演示库存100件；真实价格与库存应以商家页面实时信息为准。\n没有经核实的原价、折扣、保温时长或功效测试数据；不得编造、保证效果。\n售后：演示采用平台适用退换货规则，请以真实店铺和平台政策为准。",
+    "steps": [
+      { "id": "opening", "frameworkId": "demo-vacuum-cup-500ml", "name": "开场：介绍主播和商品，欢迎新观众；不许承诺未证实效果", "priority": 2, "maxWaitMs": 60000 },
+      { "id": "needs", "frameworkId": "demo-vacuum-cup-500ml", "name": "需求：说明通勤和日常饮水场景，询问观众常用杯子容量", "priority": 1, "maxWaitMs": 90000 },
+      { "id": "facts", "frameworkId": "demo-vacuum-cup-500ml", "name": "必讲卖点：500mL容量、304不锈钢内胆、米白和深蓝两色；引用商家资料", "priority": 2, "maxWaitMs": 120000 },
+      { "id": "usage", "frameworkId": "demo-vacuum-cup-500ml", "name": "使用与限制：清洗、留出杯口空间、旋紧杯盖；不要装干冰或强酸强碱", "priority": 2, "maxWaitMs": 180000 },
+      { "id": "interaction", "frameworkId": "demo-vacuum-cup-500ml", "name": "互动：读一条真实评论并回答；邀请喜欢讲解的观众关注和点赞", "priority": 1, "maxWaitMs": 180000 },
+      { "id": "offer", "frameworkId": "demo-vacuum-cup-500ml", "name": "价格与售后：只报页面实时到手价，说明平台退换货规则；不编造原价折扣库存", "priority": 2, "maxWaitMs": 240000 },
+      { "id": "cta", "frameworkId": "demo-vacuum-cup-500ml", "name": "成交引导：提示查看购物车规格和颜色，核对实际价格后自主下单；开始新轮讲解", "priority": 1, "maxWaitMs": 300000 },
+      { "id": "extra", "frameworkId": "demo-vacuum-cup-500ml", "name": "可选补充：在真实观众提问时演示清洗杯盖", "priority": 0, "maxWaitMs": 0 }
+    ],
+    "rules": [
+      { "id": "ban-ranking", "frameworkId": "demo-vacuum-cup-500ml", "stepId": null, "ruleType": "bannedWord", "pattern": "全网最低|全球第一|国家级品质", "enabled": true },
+      { "id": "abs-guarantee", "frameworkId": "demo-vacuum-cup-500ml", "stepId": "facts", "ruleType": "absolutization", "pattern": "保证|绝对|百分之百|100%|所有人|七天见效", "enabled": true },
+      { "id": "unverified-price", "frameworkId": "demo-vacuum-cup-500ml", "stepId": "offer", "ruleType": "unverifiedClaim", "pattern": "原价\\s*\\d+(?:\\.\\d+)?|\\d+(?:\\.\\d+)?\\s*折|只剩\\s*\\d+", "enabled": true },
+      { "id": "unverified-hours", "frameworkId": "demo-vacuum-cup-500ml", "stepId": "facts", "ruleType": "unverifiedClaim", "pattern": "(?:保温|保冷)(?:达到|长达|可达)?\\s*\\d+\\s*小时", "enabled": true },
+      { "id": "facts-keywords", "frameworkId": "demo-vacuum-cup-500ml", "stepId": "facts", "ruleType": "hotWord", "pattern": "500\\s*(?:mL|ml|毫升)|304不锈钢|米白|深蓝", "enabled": true }
+    ],
+    "updatedAt": "2026-10-14T13:50:00.000Z"
+  }
+}

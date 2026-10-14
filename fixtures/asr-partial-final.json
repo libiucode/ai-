@@ -4,15 +4,15 @@
   "messages": [
     {
       "note": "临时：部分识别结果",
-      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":2000,\"result\":{\"slice_seq\":1,\"slice_type\":0,\"start_time\":0,\"end_time\":1000,\"result_text\":\"今天给大家\"}}"
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"result\":{\"index\":0,\"slice_type\":0,\"start_time\":0,\"end_time\":1000,\"voice_text_str\":\"今天给大家\"}}"
     },
     {
       "note": "临时：同一句扩展",
-      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":4000,\"result\":{\"slice_seq\":2,\"slice_type\":1,\"start_time\":0,\"end_time\":3200,\"result_text\":\"今天给大家介绍这款保温杯\"}}"
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"result\":{\"index\":0,\"slice_type\":1,\"start_time\":0,\"end_time\":3200,\"voice_text_str\":\"今天给大家介绍这款保温杯\"}}"
     },
     {
       "note": "稳态：本句定稿",
-      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"audio_duration\":5000,\"result\":{\"slice_seq\":3,\"slice_type\":2,\"start_time\":0,\"end_time\":4800,\"result_text\":\"今天给大家介绍这款保温杯\",\"word_list\":[]}}"
+      "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-1\",\"result\":{\"index\":0,\"slice_type\":2,\"start_time\":0,\"end_time\":4800,\"voice_text_str\":\"今天给大家介绍这款保温杯\",\"word_list\":[]}}"
     }
   ],
   "expect": {

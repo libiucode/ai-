@@ -1,12 +1,14 @@
-﻿import crypto from "node:crypto";
+import crypto from "node:crypto";
 import type { BrowserWindow } from "electron";
 import { Store } from "../storage/store";
 import { TencentAsrAdapter } from "../asr/tencentAdapter";
 import type { AsrFinalPayload, AsrPartialPayload } from "../asr/types";
 import { WindowScheduler, segmentsInWindow } from "./windowScheduler";
-import { computeMetrics } from "./metrics";
+import { computeMetrics, detectSpeechIntervals } from "./metrics";
+import { issueDedupeKey } from "./deduplicate";
+import { readRuntimeAsrConfig, readRuntimeLlmConfig } from "../security/runtimeConfig";
 import { matchRules, ScriptLoopState } from "./ruleEngine";
-import { LlmClient } from "./llmClient";
+import { LlmClient, type VerifiedAnalysisResult } from "./llmClient";
 import { PcmResamplerSlicer, PACKET_MS, type AudioPacket } from "../capture/pcm";
 import type {
   AppError,
@@ -16,7 +18,7 @@ import type {
   Issue,
   ScriptStatus,
 } from "../../shared/contracts";
-import type { Settings, StartSessionConfig, AsrConfig } from "../../shared/schemas";
+import type { Settings, StartSessionConfig } from "../../shared/schemas";
 import { makeError } from "../security/errorFactory";
 
 export class SessionOrchestrator {
@@ -24,7 +26,7 @@ export class SessionOrchestrator {
   private win: BrowserWindow | null = null;
   private sessionId: string | null = null;
   private sessionStartEpoch = 0;
-  private status: "idle" | "active" | "paused" | "stopped" = "idle";
+  private status: "idle" | "active" | "paused" | "stopping" | "stopped" = "idle";
   private asr = new TencentAsrAdapter();
   private llm = new LlmClient();
   private scheduler: WindowScheduler | null = null;
@@ -34,8 +36,16 @@ export class SessionOrchestrator {
   private slicer = new PcmResamplerSlicer();
   private tickTimer: NodeJS.Timeout | null = null;
   private pendingPackets: AudioPacket[] = [];
+  private asrAudioStartMs = 0;
+  private asrAudioStarted = false;
   private finalCount = 0;
   private previousSummary = "";
+  private previousFrameworkState: VerifiedAnalysisResult["frameworkState"] = undefined;
+  /** LLM 配置态：会话开始判定一次，未配置时跳过语义分析但本地规则照常。 */
+  private llmState: "configured" | "not_configured" | "budget_exceeded" = "not_configured";
+  /** 同一错误码在会话内只提示一次，避免重复 callout 刷屏。 */
+  private notifiedErrorCodes = new Set<string>();
+  private lastErrorCode: string | null = null;
   private audioStatus: AudioStatus = {
     state: "idle",
     source: null,
@@ -53,6 +63,7 @@ export class SessionOrchestrator {
     lastError: null,
   };
   private analysisRunning = false;
+  private activeAnalysisRunId: string | null = null;
   private analysisQueued = false;
 
   constructor(store: Store) {
@@ -61,12 +72,18 @@ export class SessionOrchestrator {
     this.asr.on("final", (p) => this.handleFinal(p as AsrFinalPayload));
     this.asr.on("status", (s) => {
       const st = s as Partial<AsrStatus>;
+      if (st.state === "connected") {
+        this.asrAudioStartMs = this.nowMs();
+        this.asrAudioStarted = false;
+        st.lastError = null;
+      }
       this.asrStatus = { ...this.asrStatus, ...st };
       this.emit("asr.status", this.asrStatus);
     });
     this.asr.on("error", (e) => {
       const err = (e as { error: AppError }).error;
       this.asrStatus = { ...this.asrStatus, lastError: err, state: "error" };
+      this.emit("asr.status", this.asrStatus);
       this.emit("app.error", err);
     });
   }
@@ -86,7 +103,7 @@ export class SessionOrchestrator {
   }
 
   get sessionIsActive(): boolean {
-    return this.status === "active" || this.status === "paused";
+    return this.status === "active" || this.status === "paused" || this.status === "stopping";
   }
 
   async start(config: StartSessionConfig): Promise<{ sessionId: string; error: AppError | null }> {
@@ -101,11 +118,20 @@ export class SessionOrchestrator {
     this.sessionStartEpoch = Date.now();
     this.status = "active";
     this.finalCount = 0;
+    this.analysisRunning = false;
+    this.analysisQueued = false;
+    this.activeAnalysisRunId = null;
     this.previousSummary = "";
+    this.previousFrameworkState = undefined;
+    this.llm = new LlmClient();
     this.scriptState.reset(0);
     this.framework = this.store.listFrameworks()[0] ?? null;
     this.slicer = new PcmResamplerSlicer();
     this.pendingPackets = [];
+    this.asrAudioStartMs = 0;
+    this.asrAudioStarted = false;
+    this.asrStatus = { state: "idle", connectionId: null, reconnectAttempt: 0, lastPartialMs: 0, gapDetected: false, lastError: null };
+    this.audioStatus = { ...this.audioStatus, queueOverflowCount: 0 };
 
     this.store.createSession({
       id: sessionId,
@@ -116,43 +142,20 @@ export class SessionOrchestrator {
 
     const settingsRaw = this.store.getSetting("app_settings");
     const settings: Settings = settingsRaw ? JSON.parse(settingsRaw) : {};
-    const asrRaw = this.store.getSetting("asr_config");
-    if (asrRaw) {
-      // 非阻塞连接：ASR 的 WS 握手慢或挂住时，绝不能挡住采集、调度器和计时器就位。
-      // 历史事故（2026-10-14）：await connect 卡死 → 会话停在"启动中"假死、
-      // 分析永不运行、用户看到"没反应"。失败照常弹错误，会话继续本地采集。
-      let asrCfg: AsrConfig | undefined;
-      try {
-        asrCfg = JSON.parse(asrRaw) as AsrConfig;
-      } catch {
-        this.emit("app.error", makeError("ASR_CONFIG_INVALID", "ASR 配置解析失败，请重新保存密钥", false));
-      }
-      if (asrCfg !== undefined) {
-        void this.asr.connect(asrCfg).catch((err) => {
-          this.emit("app.error", makeError(
-            "ASR_CONNECT_FAILED",
-            `ASR 连接失败: ${err instanceof Error ? err.message : "unknown"}`,
-            true,
-          ));
-        });
-      }
+    const asrCfg = readRuntimeAsrConfig(this.store);
+    if (asrCfg) {
+      void this.asr.connect(asrCfg).catch(() => {
+        this.emit("app.error", makeError("ASR_CONNECT_FAILED", "ASR 连接失败", true));
+      });
     } else {
-      this.emit("app.error", makeError(
-        "ASR_NOT_CONFIGURED",
-        "尚未配置 ASR 密钥，音频将只做本地采集与指标",
-        false,
-      ));
+      this.emit("app.error", makeError("ASR_NOT_CONFIGURED", "尚未配置 ASR 环境密钥，音频将只做本地采集与指标", false));
     }
-    // llm config is stored without api_key (kept separately in llm_api_key);
-    // re-attach it here so Zod validation passes
-    if (settings.llm?.base_url && settings.llm?.model) {
-      const llmApiKey = this.store.getSetting("llm_api_key");
-      try {
-        this.llm.configure({ ...settings.llm, api_key: llmApiKey ?? "" });
-      } catch {
-        /* llm misconfigured: analysis disabled */
-      }
-    }
+    const llmCfg = readRuntimeLlmConfig(this.store);
+    // LLM 配置态在会话开始时判定一次：未配置就跳过语义分析，本地规则照常跑。
+    // 不把配置态当运行故障，避免每个窗口重复抛同一条错误刷屏。
+    this.llmState = llmCfg ? "configured" : "not_configured";
+    this.notifiedErrorCodes = new Set();
+    if (llmCfg) this.llm.configure(llmCfg);
 
     const intervalMs = (config.windowIntervalSec ?? settings.windowIntervalSec ?? 60) * 1000;
     const windowMs = (config.windowSizeSec ?? settings.windowSizeSec ?? 300) * 1000;
@@ -162,7 +165,7 @@ export class SessionOrchestrator {
         getWindow: (s, e) => this.runAnalysis(s, e),
         onSkipped: (reason) => {
           this.analysisQueued = true;
-          this.emit("analysis.status", this.analysisStatusSnapshot("skipped:" + reason));
+          this.emit("analysis.status", this.analysisStatusSnapshot(`skipped:${reason};count=${this.scheduler?.skippedCount ?? 0}`));
         },
       });
       this.scheduler.start(0);
@@ -202,8 +205,11 @@ export class SessionOrchestrator {
     // 适配器还会自动重连再被饿死，循环浪费连接与配额。恢复时重连。
     // 2026-10-14 用户实测：暂停 2 分钟收到 4008 + 满屏断线重连警告。
     try {
+      await this.flushAudio();
       await this.asr.stop();
     } catch { /* best effort */ }
+    this.asrStatus = { ...this.asrStatus, state: "closed" };
+    this.emit("asr.status", this.asrStatus);
   }
 
   /**
@@ -213,39 +219,32 @@ export class SessionOrchestrator {
    */
   async resume() {
     if (this.status !== "paused") return;
+    this.pendingPackets = [];
+    this.slicer.reset(this.nowMs());
     this.status = "active";
     this.store.updateSessionStatus(this.sessionId!, "active");
     this.audioStatus = { ...this.audioStatus, state: "capturing" };
     this.emit("capture.status", this.audioStatus);
-    const asrRaw = this.store.getSetting("asr_config");
-    if (!asrRaw) return;
-    let asrCfg: AsrConfig;
-    try {
-      asrCfg = JSON.parse(asrRaw) as AsrConfig;
-    } catch {
-      this.emit("app.error", makeError("ASR_CONFIG_INVALID", "ASR 配置解析失败，请重新保存密钥", false));
-      return;
-    }
-    void this.asr.connect(asrCfg).catch((err) => {
-      this.emit("app.error", makeError(
-        "ASR_CONNECT_FAILED",
-        `ASR 连接失败: ${err instanceof Error ? err.message : "unknown"}`,
-        true,
-      ));
+    const asrCfg = readRuntimeAsrConfig(this.store);
+    if (!asrCfg) return;
+    void this.asr.connect(asrCfg).catch(() => {
+      this.emit("app.error", makeError("ASR_CONNECT_FAILED", "ASR 连接失败", true));
     });
   }
 
   async stop() {
-    if (!this.sessionIsActive) return;
-    this.status = "stopped";
+    if (!this.sessionIsActive || this.status === "stopping") return;
+    this.status = "stopping";
     if (this.tickTimer) clearInterval(this.tickTimer);
     this.tickTimer = null;
     this.scheduler?.dispose();
     try {
+      await this.flushAudio();
       await this.asr.stop();
     } catch {
       /* best effort */
     }
+    this.status = "stopped";
     this.store.updateSessionStatus(this.sessionId!, "stopped", new Date().toISOString());
     this.audioStatus = { ...this.audioStatus, state: "idle" };
     this.emit("capture.status", this.audioStatus);
@@ -257,7 +256,12 @@ export class SessionOrchestrator {
   ingestAudio(float32: Float32Array, sourceRate: number): void {
     if (this.status !== "active" || !this.sessionId) return;
     const packets = this.slicer.push(float32, sourceRate, this.nowMs());
-    for (const p of packets) this.pendingPackets.push(p);
+    for (const p of packets) {
+      for (const iv of detectSpeechIntervals([p])) {
+        this.store.insertSpeechInterval({ id: crypto.randomUUID(), sessionId: this.sessionId, ...iv });
+      }
+      this.pendingPackets.push(p);
+    }
     // bounded queue ~10s
     const maxPackets = Math.floor(10000 / PACKET_MS);
     if (this.pendingPackets.length > maxPackets) {
@@ -273,9 +277,38 @@ export class SessionOrchestrator {
     const sendUntil = this.nowMs() - 500;
     while (this.pendingPackets.length && this.pendingPackets[0].startMs < sendUntil) {
       const p = this.pendingPackets.shift()!;
-      void this.asr.sendPcm(p.pcm).catch(() => {
+      void this.sendPacket(p).catch(() => {
         /* adapter handles reconnection; drop packet */
       });
+    }
+  }
+
+  private sendPacket(packet: AudioPacket): Promise<void> {
+    if (this.asrStatus.state === "connected" && !this.asrAudioStarted) {
+      // Tencent timestamps start at zero for each connection. Anchor them to
+      // the first audio packet actually sent on that connection.
+      this.asrAudioStartMs = packet.startMs;
+      this.asrAudioStarted = true;
+    }
+    return this.asr.sendPcm(packet.pcm);
+  }
+
+  private async flushAudio(): Promise<void> {
+    const tail = this.slicer.flush();
+    const packets = this.pendingPackets.splice(0);
+    if (tail) {
+      if (this.sessionId) {
+        for (const iv of detectSpeechIntervals([tail])) {
+          this.store.insertSpeechInterval({ id: crypto.randomUUID(), sessionId: this.sessionId, ...iv });
+        }
+      }
+      packets.push(tail);
+    }
+    if (this.asrStatus.state !== "connected") return;
+    for (const packet of packets) {
+      try { await this.sendPacket(packet); } catch { break; }
+      // Keep the service's 1:1 real-time rate while sending the buffered tail.
+      await new Promise((resolve) => setTimeout(resolve, packet.durationMs));
     }
   }
 
@@ -287,8 +320,8 @@ export class SessionOrchestrator {
       sessionId: this.sessionId,
       connectionId: p.connectionId,
       sourceSeq: p.sourceSeq,
-      startMs: p.startMs,
-      endMs: p.endMs,
+      startMs: this.asrAudioStartMs + p.startMs,
+      endMs: this.asrAudioStartMs + p.endMs,
       text: p.text,
       isFinal: false,
       createdAt: new Date().toISOString(),
@@ -302,8 +335,8 @@ export class SessionOrchestrator {
       sessionId: this.sessionId,
       connectionId: p.connectionId,
       sourceSeq: p.sourceSeq,
-      startMs: p.startMs,
-      endMs: p.endMs,
+      startMs: this.asrAudioStartMs + p.startMs,
+      endMs: this.asrAudioStartMs + p.endMs,
       text: p.text,
       isFinal: true,
       createdAt: new Date().toISOString(),
@@ -311,12 +344,7 @@ export class SessionOrchestrator {
     const inserted = this.store.insertSegment(seg);
     if (!inserted) return;
     this.finalCount++;
-    this.store.insertSpeechInterval({
-      id: crypto.randomUUID(),
-      sessionId: this.sessionId,
-      startMs: seg.startMs,
-      endMs: seg.endMs,
-    });
+    // Speech duration comes from PCM VAD, independently of ASR segment length.
     const newPhase = this.scriptState.feed(seg.text, seg.endMs);
     if (newPhase) {
       // 阶段切换：推送结构化 script.status（替代以前塞进 analysis.status 的 phase:xxx 文本）
@@ -331,7 +359,17 @@ export class SessionOrchestrator {
       queued: this.analysisQueued,
       lastRunId: null,
       lastRunStatus: note ?? null,
+      llm: this.llmState,
+      lastErrorCode: this.lastErrorCode,
     };
+  }
+
+  /** 同一错误码会话内只 emit 一次 app.error，其余只在状态里体现。 */
+  private emitAnalysisError(error: AppError) {
+    if (this.notifiedErrorCodes.has(error.code)) return;
+    this.notifiedErrorCodes.add(error.code);
+    this.lastErrorCode = error.code;
+    this.emit("app.error", error);
   }
 
   /** 推送话术阶段状态：阶段切换即时发，活跃期每秒随 tick 发（刷新停留时长与超时）。 */
@@ -354,42 +392,53 @@ export class SessionOrchestrator {
 
   private async runAnalysis(startMs: number, endMs: number) {
     if (!this.sessionId) return;
+    const sessionId = this.sessionId;
+    const llm = this.llm;
+    const emit = (event: string, payload: unknown) => {
+      if (this.sessionId === sessionId) this.emit(event, payload);
+    };
     this.analysisRunning = true;
     this.analysisQueued = false;
     const runId = crypto.randomUUID();
+    this.activeAnalysisRunId = runId;
+    let runStatus: "success" | "failed" | "timeout" = "success";
     this.store.insertAnalysisRun({
       id: runId,
-      sessionId: this.sessionId,
+      sessionId,
       windowId: crypto.randomUUID(),
       status: "running",
       startedAt: new Date().toISOString(),
     });
-    this.emit("analysis.status", { running: true, queued: false, lastRunId: runId, lastRunStatus: "running" });
+    emit("analysis.status", { running: true, queued: false, lastRunId: runId, lastRunStatus: "running", llm: this.llmState, lastErrorCode: this.lastErrorCode });
 
     try {
       const segments = segmentsInWindow(
-        this.store.querySegments({ sessionId: this.sessionId, finalOnly: true }),
+        this.store.querySegments({ sessionId, finalOnly: true, startMs, endMs }),
         startMs,
         endMs,
       );
-      const intervals = this.store.querySpeechIntervals(this.sessionId, startMs, endMs);
+      const intervals = this.store.querySpeechIntervals(sessionId, startMs, endMs);
       const metrics = computeMetrics(segments, intervals, startMs, endMs);
 
       const frameworkList = this.store.listFrameworks();
       const framework = frameworkList[0] ?? null;
       this.framework = framework;
       const issues: Issue[] = [];
+      const issueSteps = new Map<string, string | null>();
       for (const seg of segments) {
         const hits = matchRules(seg.text, {
           framework,
           productFacts: framework?.productFacts ?? "",
         });
         for (const hit of hits) {
+          if (hit.ruleType === "hotWord") continue;
+          const id = crypto.randomUUID();
+          issueSteps.set(id, hit.stepId ?? null);
           issues.push({
-            id: crypto.randomUUID(),
-            sessionId: this.sessionId,
+            id,
+            sessionId,
             analysisRunId: runId,
-            type: hit.ruleType === "hotWord" ? "other" : (hit.ruleType as Issue["type"]),
+            type: hit.ruleType as Issue["type"],
             severity: hit.ruleType === "bannedWord" ? "critical" : "warning",
             startMs: seg.startMs,
             endMs: seg.endMs,
@@ -404,41 +453,27 @@ export class SessionOrchestrator {
           });
         }
       }
-      if (metrics.longestSilenceMs > 30000) {
-        issues.push({
-          id: crypto.randomUUID(),
-          sessionId: this.sessionId,
-          analysisRunId: runId,
-          type: "silence",
-          severity: "info",
-          startMs,
-          endMs,
-          segmentIds: [],
-          quote: "",
-          basis: `最长连续静音 ${Math.round(metrics.longestSilenceMs / 1000)} 秒`,
-          recommendation: "可通过互动话题或福利预告填补静音",
-          suggestedScript: null,
-          confidence: 1,
-          needsReview: false,
-          status: "open",
-        });
-      }
+      // Silence remains an objective VAD metric; do not fabricate quotation evidence.
 
       const persisted: Issue[] = [];
       for (const issue of issues) {
-        const dedupeKey = `${issue.type}|${issue.segmentIds.slice().sort().join(",")}|${issue.quote}`;
+        const dedupeKey = issueDedupeKey(issue, issueSteps.get(issue.id) ?? null);
         const outcome = this.store.upsertIssue(issue, dedupeKey);
         if (outcome === "created") persisted.push(issue);
       }
 
-      if (segments.length > 0) {
+      if (segments.length > 0 && this.llmState !== "not_configured") {
         try {
-          const llmResult = await this.llm.analyze({
+          const llmResult = await llm.analyze({
+            sessionId,
+            framework,
+            previousFrameworkState: this.previousFrameworkState,
+            scriptPhase: { phase: this.scriptState.current, elapsedMs: Math.max(0, this.scriptState.elapsedMs(endMs)) },
             windowStartMs: startMs,
             windowEndMs: endMs,
             segments,
             rulesSummary: framework
-              ? framework.rules.map((r) => `${r.ruleType}:${r.pattern}`).join(";")
+              ? framework.rules.filter((r) => r.enabled).map((r) => `${r.ruleType}:${r.pattern}`).join(";")
               : "默认绝对化用语/未核实宣称规则",
             productFacts: framework?.productFacts ?? "",
             previousSummary: this.previousSummary,
@@ -451,7 +486,7 @@ export class SessionOrchestrator {
             if (!segsForIssue.length) continue;
             const issue: Issue = {
               id: crypto.randomUUID(),
-              sessionId: this.sessionId,
+              sessionId,
               analysisRunId: runId,
               type: li.type,
               severity: li.severity,
@@ -466,31 +501,45 @@ export class SessionOrchestrator {
               needsReview: li.needsReview,
               status: "open",
             };
-            const dedupeKey = `${issue.type}|${issue.segmentIds.slice().sort().join(",")}|${issue.quote}`;
+            issueSteps.set(issue.id, li.stepId ?? null);
+            const dedupeKey = issueDedupeKey(issue, issueSteps.get(issue.id) ?? null);
             const outcome = this.store.upsertIssue(issue, dedupeKey);
             if (outcome === "created") persisted.push(issue);
           }
-          this.previousSummary = llmResult.frameworkStateSummary ?? this.previousSummary;
+          if (this.sessionId === sessionId) {
+            this.previousSummary = llmResult.frameworkStateSummary ?? this.previousSummary;
+            this.previousFrameworkState = llmResult.frameworkState ?? this.previousFrameworkState;
+          }
           this.store.finishAnalysisRun(runId, "success", new Date().toISOString(), null);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : "unknown";
-          this.store.finishAnalysisRun(runId, "failed", new Date().toISOString(), msg);
-          this.emit("app.error", makeError("ANALYSIS_LLM_FAILED", `LLM 分析失败: ${msg}`, true));
+          const appError = err as Partial<AppError> | null;
+          runStatus = appError?.code === "LLM_TIMEOUT" ? "timeout" : "failed";
+          if (appError?.code === "LLM_BUDGET_EXCEEDED") this.llmState = "budget_exceeded";
+          const msg = appError?.code && appError.message ? `${appError.code}: ${appError.message}` : err instanceof Error ? err.message : "unknown";
+          this.store.finishAnalysisRun(runId, runStatus, new Date().toISOString(), msg);
+          this.emitAnalysisError(makeError(appError?.code ?? "ANALYSIS_LLM_FAILED", `LLM 分析失败: ${msg}`, true));
         }
+      } else if (segments.length > 0) {
+        // LLM 未配置：跳过语义分析，本地规则问题照常展示（上方已落库）。
+        this.store.finishAnalysisRun(runId, "success", new Date().toISOString(), null);
       } else {
         this.store.finishAnalysisRun(runId, "success", new Date().toISOString(), null);
       }
 
       if (persisted.length > 0) {
-        this.emit("analysis.issues", persisted);
+        emit("analysis.issues", persisted);
       }
-      this.emit("analysis.status", { running: false, queued: false, lastRunId: runId, lastRunStatus: "success" });
+      emit("analysis.status", this.analysisStatusSnapshot(runStatus));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "unknown";
+      const appError = err as Partial<AppError> | null;
+      const msg = appError?.code && appError.message ? `${appError.code}: ${appError.message}` : err instanceof Error ? err.message : "unknown";
       this.store.finishAnalysisRun(runId, "failed", new Date().toISOString(), msg);
-      this.emit("analysis.status", { running: false, queued: false, lastRunId: runId, lastRunStatus: "failed" });
+      emit("analysis.status", this.analysisStatusSnapshot("failed"));
     } finally {
-      this.analysisRunning = false;
+      if (this.activeAnalysisRunId === runId) {
+        this.analysisRunning = false;
+        this.activeAnalysisRunId = null;
+      }
     }
   }
 

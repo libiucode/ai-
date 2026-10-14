@@ -11,15 +11,16 @@ export function SettingsPage() {
   const [asrMsg, setAsrMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [llmMsg, setLlmMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState<"asr" | "llm" | null>(null);
-  const [showSecrets, setShowSecrets] = useState(false);
 
-  // ASR / LLM form drafts (separate from saved settings until tested+saved)
+  // 只保留公开配置的编辑态：App ID、Base URL、模型名。
+  // 密钥一律来自进程环境变量，界面不提供任何 secret 输入。
   const [asrAppId, setAsrAppId] = useState("");
-  const [asrSecretId, setAsrSecretId] = useState("");
-  const [asrSecretKey, setAsrSecretKey] = useState("");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmModel, setLlmModel] = useState("");
-  const [llmApiKey, setLlmApiKey] = useState("");
+
+  /** 配置来源是否为环境变量（主进程从进程 env 读密钥）。 */
+  const asrFromEnv = asrStatus?.source === "environment";
+  const llmFromEnv = llmStatus?.source === "environment";
 
   useEffect(() => {
     void reload();
@@ -34,66 +35,52 @@ export function SettingsPage() {
     setSettings(s);
     setAsrStatus(asrInfo);
     setLlmStatus(llmInfo);
-    if (s.llm) {
-      setLlmBaseUrl(s.llm.base_url ?? "");
-      setLlmModel(s.llm.model ?? "");
-    }
-    // asr fields are not returned (masked), only status flags
+    setLlmBaseUrl(s.llm?.base_url ?? "");
+    setLlmModel(s.llm?.model ?? "");
   }
 
   async function doSave() {
     if (!settings) return;
     const payload: Settings = { ...settings };
-    // attach fresh credentials only if user typed them; otherwise keep stored ones
-    const asrFilled = asrAppId && asrSecretId && asrSecretKey;
-    if (asrFilled) {
-      payload.asr = {
-        provider: "tencent",
-        appId: asrAppId,
-        secretId: asrSecretId,
-        secretKey: asrSecretKey,
-      };
+    // 只保存公开配置。密钥字段一律不传：主进程只认环境变量，
+    // 传了也会被忽略，还会诱导用户以为"填了就能生效"。
+    if (asrAppId) {
+      payload.asr = { provider: "tencent", appId: asrAppId, secretId: "", secretKey: "" };
+    } else {
+      delete payload.asr;
     }
-    const llmFilled = llmBaseUrl && llmModel && llmApiKey;
-    if (llmFilled) {
-      payload.llm = { ...payload.llm, base_url: llmBaseUrl, model: llmModel, api_key: llmApiKey };
-    } else if (llmBaseUrl && llmModel) {
-      payload.llm = { ...payload.llm, base_url: llmBaseUrl, model: llmModel };
-    }
+    const { api_key: _dropKey, ...restLlm } = { ...payload.llm, base_url: llmBaseUrl, model: llmModel };
+    payload.llm = restLlm;
     const ok = await window.appApi.saveSettings(payload);
-    setMsg(ok ? { ok: true, text: "设置已保存。密钥仅存储在本地数据库，不会出现在日志或导出中。" } : { ok: false, text: "保存失败：字段校验未通过" });
-    if (ok) {
-      setAsrSecretId("");
-      setAsrSecretKey("");
-      setLlmApiKey("");
-      await reload();
-    }
+    setMsg(
+      ok
+        ? {
+            ok: true,
+            text: "公开配置已保存。密钥由环境变量提供，不会经过界面、也不会写入本地数据库。",
+          }
+        : { ok: false, text: "保存失败：字段校验未通过" },
+    );
+    if (ok) await reload();
   }
 
   async function testAsr() {
     setTesting("asr");
     setAsrMsg(null);
-    // 三项留空但已配置过 → 让主进程读库里已存配置测（渲染层不接触明文）
-    const useStored = !asrAppId && !asrSecretId && !asrSecretKey && !!asrStatus?.configured;
-    // 防呆：App ID 必须是纯数字（填成“腾讯”这类会绕一圈问服务器才报 4001）
-    if (!useStored && asrAppId && !/^\d+$/.test(asrAppId)) {
+    // 连接测试统一走 useStored：主进程读环境变量里的密钥，
+    // 界面没有也不可能有 secret 输入框。
+    if (asrAppId && !/^\d+$/.test(asrAppId)) {
       setTesting(null);
       setAsrMsg({ ok: false, text: `App ID 应为纯数字（腾讯云控制台 → 账号信息里的 APPID，如 1258899888），当前填的是「${asrAppId}」` });
       return;
     }
     try {
-      const result = await window.appApi.testAsrConnection(
-        useStored
-          ? { useStored: true }
-          : { provider: "tencent", appId: asrAppId, secretId: asrSecretId, secretKey: asrSecretKey },
-      );
+      const result = await window.appApi.testAsrConnection({ useStored: true });
       setAsrMsg(
         result.ok
-          ? { ok: true, text: "腾讯云 ASR 连接成功" }
+          ? { ok: true, text: "环境密钥连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
     } catch (err) {
-      // 没有 catch 时 invoke 拒绝会静默吞掉，用户看到一个“没反应”的按钮
       setAsrMsg({ ok: false, text: `连接失败：${err instanceof Error ? err.message : "未知错误"}` });
     } finally {
       setTesting(null);
@@ -103,22 +90,12 @@ export function SettingsPage() {
   async function testLlm() {
     setTesting("llm");
     setLlmMsg(null);
-    const useStored = !llmBaseUrl && !llmModel && !llmApiKey && !!llmStatus?.configured;
+    // 与 ASR 同理：密钥只从环境变量读，界面没有也不该有 key 输入。
     try {
-      const result = await window.appApi.testLlmConnection(
-        useStored
-          ? { useStored: true }
-          : {
-              base_url: llmBaseUrl,
-              model: llmModel,
-              api_key: llmApiKey,
-              request_timeout_ms: 10000,
-              max_retries: 0,
-            },
-      );
+      const result = await window.appApi.testLlmConnection({ useStored: true });
       setLlmMsg(
         result.ok
-          ? { ok: true, text: "LLM 连接成功" }
+          ? { ok: true, text: "环境密钥连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
     } catch (err) {
@@ -139,43 +116,45 @@ export function SettingsPage() {
             <>
               <Badge tone="ok">已配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
-                AppId {asrStatus.appId} · SecretId 尾号 {asrStatus.secretIdTail}
+                {asrFromEnv
+                  ? `密钥来自环境变量（App ID ${asrStatus.appId}）`
+                  : "密钥来自本机数据库（旧版配置，建议改用环境变量）"}
               </span>
             </>
           ) : (
-            <Badge tone="dim">未配置</Badge>
+            <>
+              <Badge tone="dim">未配置</Badge>
+              <span style={{ marginLeft: 8, color: tokens.textDim }}>
+                需要 DSH_SECRET_TENCENT_ASR_SECRET_ID / DSH_SECRET_TENCENT_ASR_SECRET_KEY 环境变量
+              </span>
+            </>
           )}
         </div>
-        <Field label="App ID">
-          <input className="input" value={asrAppId} onChange={(e) => setAsrAppId(e.target.value)} placeholder="腾讯云账号 APPID" />
-        </Field>
-        <Field label="Secret ID">
+        {/*
+          密钥一律来自进程环境变量，主进程只从 env 读、不接界面传入的 secret。
+          这里因此不再提供 Secret ID / Secret Key 输入框——填了也会被忽略，
+          摆两个能输入的框子只会让人误以为改这里就能换密钥。改密钥请改启动环境。
+        */}
+        <Field label="App ID" hint="腾讯云账号 APPID（公开信息，可在此修改后保存）">
           <input
             className="input"
-            type={showSecrets ? "text" : "password"}
-            value={asrSecretId}
-            onChange={(e) => setAsrSecretId(e.target.value)}
-            placeholder={asrStatus?.configured ? "已存储（输入新值可覆盖）" : "AKID…"}
-          />
-        </Field>
-        <Field label="Secret Key" hint="密钥不会明文显示，不会写入日志或任何导出文件。">
-          <input
-            className="input"
-            type={showSecrets ? "text" : "password"}
-            value={asrSecretKey}
-            onChange={(e) => setAsrSecretKey(e.target.value)}
-            placeholder={asrStatus?.configured ? "已存储（输入新值可覆盖）" : ""}
+            value={asrAppId}
+            onChange={(e) => setAsrAppId(e.target.value)}
+            placeholder={asrStatus?.appId || "1502622498"}
           />
         </Field>
         <div style={{ display: "flex", gap: 8 }}>
           <Button onClick={testAsr} disabled={testing === "asr"}>
             {testing === "asr" ? "测试中…" : "测试连接"}
           </Button>
-          <Button variant="ghost" onClick={() => setShowSecrets((v) => !v)}>{showSecrets ? "隐藏明文" : "临时显示明文"}</Button>
         </div>
         {asrMsg ? (
           <div style={{ marginTop: 8, fontSize: 13, color: asrMsg.ok ? tokens.ok : tokens.danger }}>{asrMsg.text}</div>
         ) : null}
+        <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
+          密钥来源：环境变量 DSH_SECRET_TENCENT_ASR_SECRET_ID / DSH_SECRET_TENCENT_ASR_SECRET_KEY。
+          「测试连接」同样只使用环境里的密钥，界面无法查看或替换。
+        </div>
       </Panel>
 
       <Panel title="LLM（OpenAI 兼容接口）">
@@ -185,27 +164,28 @@ export function SettingsPage() {
             <>
               <Badge tone="ok">已配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
-                {llmStatus.model} @ {llmStatus.baseUrl} · Key 尾号 {llmStatus.keyTail}
+                {llmStatus.model} @ {llmStatus.baseUrl}
+                {llmFromEnv ? "（密钥来自环境变量）" : "（密钥来自本机数据库，建议改用环境变量）"}
               </span>
             </>
           ) : (
-            <Badge tone="dim">未配置</Badge>
+            <>
+              <Badge tone="dim">未配置</Badge>
+              <span style={{ marginLeft: 8, color: tokens.textDim }}>
+                需要环境变量 DSH_SECRET_LLM_API_KEY，以及 Base URL 与模型名
+              </span>
+            </>
           )}
         </div>
+        {/*
+          与 ASR 同理：LLM 密钥同样只从环境变量读，主进程会忽略界面传入的 api_key。
+          这里不摆 API Key 输入框，只留公开配置（Base URL / 模型名）。
+        */}
         <Field label="Base URL" hint="例如 https://api.openai.com/v1 或其他兼容服务地址">
           <input className="input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} placeholder="https://…" />
         </Field>
         <Field label="模型名">
           <input className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="gpt-4o-mini / glm-4-flash / …" />
-        </Field>
-        <Field label="API Key" hint="仅保存在本地数据库 settings 表，界面只显示脱敏尾部。">
-          <input
-            className="input"
-            type={showSecrets ? "text" : "password"}
-            value={llmApiKey}
-            onChange={(e) => setLlmApiKey(e.target.value)}
-            placeholder={llmStatus?.configured ? "已存储（输入新值可覆盖）" : "sk-…"}
-          />
         </Field>
         <Button onClick={testLlm} disabled={testing === "llm"}>
           {testing === "llm" ? "测试中…" : "测试连接"}
@@ -213,6 +193,9 @@ export function SettingsPage() {
         {llmMsg ? (
           <div style={{ marginTop: 8, fontSize: 13, color: llmMsg.ok ? tokens.ok : tokens.danger }}>{llmMsg.text}</div>
         ) : null}
+        <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
+          密钥来源：环境变量 DSH_SECRET_LLM_API_KEY。「测试连接」只使用环境里的密钥，界面无法查看或替换。
+        </div>
       </Panel>
 
       <Panel title="分析设置">

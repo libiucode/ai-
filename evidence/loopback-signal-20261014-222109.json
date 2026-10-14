@@ -1,0 +1,254 @@
+﻿{
+    "chunkFile":  "D:\\ai盯播工具\\app\\evidence\\loopback-signal-chunks-20261014-222109.json",
+    "console":  [
+                    {
+
+                    }
+                ],
+    "samples":  [
+                    {
+                        "t":  1,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  2,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  3,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  4,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  5,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  6,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  7,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  8,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  9,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  10,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  11,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  12,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  13,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  14,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  15,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  16,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  17,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  18,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  19,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  20,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  21,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  22,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  23,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  24,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    },
+                    {
+                        "t":  25,
+                        "timer":  {
+
+                                  },
+                        "chunks":  0,
+                        "mean":  null,
+                        "peak":  null
+                    }
+                ],
+    "signal":  {
+                   "seconds":  25,
+                   "rate":  48000,
+                   "file":  "C:\\Users\\libiu\\AppData\\Local\\Temp\\probe-signal-20261014-222109.wav",
+                   "type":  "tone"
+               },
+    "kind":  "loopback-known-signal",
+    "at":  "2026-10-14T22:21:38.2259347+08:00",
+    "final":  {
+                  "chunkCount":  0,
+                  "errors":  [
+
+                             ]
+              },
+    "click":  {
+                  "ok":  true,
+                  "text":  "监听系统声音",
+                  "disabled":  false
+              }
+}

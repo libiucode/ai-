@@ -85,17 +85,23 @@ export interface WindowApi {
   getLlmStatus(): Promise<LlmStatusInfo>;
 }
 
+/**
+ * 配置来源。'environment' 表示凭证由进程环境变量提供（不入库、不可在界面修改）；
+ * 'storage' 表示来自本地数据库。密钥一律不回传给渲染层，这里只标来源。
+ */
+export type ConfigSource = "environment" | "storage";
+
 export interface AsrStatusInfo {
   configured: boolean;
   appId?: string;
-  secretIdTail?: string;
+  source?: ConfigSource;
 }
 
 export interface LlmStatusInfo {
   configured: boolean;
   baseUrl?: string;
   model?: string;
-  keyTail?: string;
+  source?: ConfigSource;
 }
 
 /** Runtime shape of window.appApi including the raw audio ingest hook. */

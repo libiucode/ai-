@@ -54,13 +54,17 @@ export function computeMetrics(
   windowEndMs: number,
 ): WindowMetrics {
   const totalMs = Math.max(0, windowEndMs - windowStartMs);
-  let speechMs = 0;
-  for (const iv of speechIntervals) {
-    const s = Math.max(iv.startMs, windowStartMs);
-    const e = Math.min(iv.endMs, windowEndMs);
-    if (e > s) speechMs += e - s;
+  const intervals = speechIntervals
+    .map((iv) => ({ startMs: Math.max(iv.startMs, windowStartMs), endMs: Math.min(iv.endMs, windowEndMs) }))
+    .filter((iv) => Number.isFinite(iv.startMs) && Number.isFinite(iv.endMs) && iv.endMs > iv.startMs)
+    .sort((a, b) => a.startMs - b.startMs);
+  const merged: typeof intervals = [];
+  for (const iv of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && iv.startMs - last.endMs < 200) last.endMs = Math.max(last.endMs, iv.endMs);
+    else merged.push({ ...iv });
   }
-  speechMs = Math.min(speechMs, totalMs);
+  const speechMs = merged.reduce((sum, iv) => sum + iv.endMs - iv.startMs, 0);
 
   let chineseChars = 0;
   let englishWords = 0;
@@ -92,18 +96,14 @@ export function computeMetrics(
     prevRate = rate;
   }
 
-  // silence gaps from speech intervals
+  // silence gaps in the clipped union of VAD intervals
   let longestSilenceMs = 0;
-  for (let i = 0; i < speechIntervals.length - 1; i++) {
-    const gap = speechIntervals[i + 1].startMs - speechIntervals[i].endMs;
-    if (gap > longestSilenceMs) longestSilenceMs = gap;
+  let cursorMs = windowStartMs;
+  for (const iv of merged) {
+    longestSilenceMs = Math.max(longestSilenceMs, iv.startMs - cursorMs);
+    cursorMs = iv.endMs;
   }
-  if (speechIntervals.length === 0) longestSilenceMs = totalMs;
-  else {
-    const headGap = speechIntervals[0].startMs - windowStartMs;
-    const tailGap = windowEndMs - speechIntervals[speechIntervals.length - 1].endMs;
-    longestSilenceMs = Math.max(longestSilenceMs, headGap, tailGap);
-  }
+  longestSilenceMs = Math.max(longestSilenceMs, windowEndMs - cursorMs);
 
   // repetition: max pairwise similarity among final segments
   let maxRepeatSimilarity = 0;
@@ -130,8 +130,8 @@ export function computeMetrics(
     silenceMs: totalMs - speechMs,
     chineseChars,
     englishWords,
-    charsPerSpeechMinute: speechMinutes > 0 ? chineseChars / speechMinutes : 0,
-    charsPerTotalMinute: totalMinutes > 0 ? chineseChars / totalMinutes : 0,
+    charsPerSpeechMinute: speechMinutes > 0 ? (chineseChars + englishWords) / speechMinutes : 0,
+    charsPerTotalMinute: totalMinutes > 0 ? (chineseChars + englishWords) / totalMinutes : 0,
     paceChanges,
     longestSilenceMs,
     maxRepeatSimilarity,
@@ -160,11 +160,11 @@ export function detectSpeechIntervals(
     }
   }
   if (open) intervals.push(open);
-  // merge intervals separated by < 300ms
+  // merge intervals separated by < 200ms
   const merged: typeof intervals = [];
   for (const iv of intervals) {
     const last = merged[merged.length - 1];
-    if (last && iv.startMs - last.endMs < 300) last.endMs = iv.endMs;
+    if (last && iv.startMs - last.endMs < 200) last.endMs = iv.endMs;
     else merged.push({ ...iv });
   }
   return merged;

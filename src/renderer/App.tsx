@@ -40,9 +40,11 @@ export default function App() {
           ))}
         </div>
         <div className="sidebar-foot">
-          MVP · 本地运行
+          记录保存在本机数据库
           <br />
-          数据不出本机
+          音频与转写按配置
+          <br />
+          发送至 ASR / AI 服务
         </div>
       </nav>
       <main className="content">

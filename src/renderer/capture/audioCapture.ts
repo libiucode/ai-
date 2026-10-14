@@ -73,17 +73,21 @@ export async function startLoopbackCapture(
       return { ok: false, error: { code: "PERMISSION_DENIED", message: "屏幕共享被取消。系统声音采集需要选择一个共享目标并勾选“分享音频”。" } };
     }
     if (e.name === "NotSupportedError") {
-      // 实测：某些环境（如 Windows 11 预览版、显示采集能力被系统策略/驱动禁用时）
-      // getDisplayMedia 会直接抛 NotSupportedError，与应用无关。给出可操作的提示，
-      // 而不是把 "Not supported" 原样甩给用户。
+      // 2026-10-14 实测（Electron 33.4.11 / Chrome 130 / Win10）：main 进程未注册
+      // setDisplayMediaRequestHandler 时，getDisplayMedia 直接抛 NotSupportedError。
+      // 早先的注释把它归因为「系统版本/驱动/策略限制、不是应用故障」，这是误判——
+      // 实测证明它同样是应用侧原因，且是当前最可能的原因。不要再向用户断言
+      // 「与 app 无关」，也不要引导用户去装驱动或换机器；只说明需要排查采集源、
+      // 权限与系统支持这三类原因。（Electron 的桌面选择器不是 Chrome 的 share picker，
+      // 不存在「标签页共享/tabAudio」这个可勾选项，文档里不要这样写。）
       return {
         ok: false,
         error: {
           code: "NOT_SUPPORTED",
           message:
-            "系统声音采集不可用：当前环境不支持屏幕共享采集（NotSupportedError）。" +
-            "这通常是系统的显示采集能力缺失（系统版本/驱动/策略限制），不是应用故障。" +
-            "请改用「开始麦克风监听」，或更换一台机器验证系统声音模式。",
+            "系统声音采集不可用：当前环境未能提供系统声音采集源（NotSupportedError）。" +
+            "可能原因：应用未注册系统声音采集授权、屏幕录制权限未开启、或当前系统不支持回环采集。" +
+            "请检查应用与系统的音频采集权限设置，或改用「开始麦克风监听」。",
         },
       };
     }

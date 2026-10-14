@@ -6,7 +6,7 @@
     "messages": [
       {
         "note": "连接A稳态1",
-        "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-a\",\"audio_duration\":3000,\"result\":{\"slice_seq\":1,\"slice_type\":2,\"start_time\":0,\"end_time\":2800,\"result_text\":\"这款杯子保温十二小时\"}}"
+        "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-a\",\"result\":{\"index\":0,\"slice_type\":2,\"start_time\":0,\"end_time\":2800,\"voice_text_str\":\"这款杯子保温十二小时\"}}"
       },
       {
         "note": "连接A错误：服务断开",
@@ -19,8 +19,8 @@
     "voice_id": "voice-demo-b",
     "messages": [
       {
-        "note": "连接B重连后 seq 从1重新计数（不得与连接A去重冲突）",
-        "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-b\",\"audio_duration\":6000,\"result\":{\"slice_seq\":1,\"slice_type\":2,\"start_time\":0,\"end_time\":2500,\"result_text\":\"现在下单还有优惠\"}}"
+        "note": "连接B重连后 index 从0重新计数（不得与连接A去重冲突）",
+        "raw": "{\"code\":0,\"message\":\"success\",\"voice_id\":\"voice-demo-b\",\"result\":{\"index\":0,\"slice_type\":2,\"start_time\":0,\"end_time\":2500,\"voice_text_str\":\"现在下单还有优惠\"}}"
       }
     ],
     "connectionId": "conn-B"

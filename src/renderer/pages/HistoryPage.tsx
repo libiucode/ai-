@@ -161,11 +161,23 @@ function ReportView({ report }: { report: ReportSummary }) {
 
       <Panel title="分析质量与缺口">
         <div className="kv-grid">
-          <KV k="ASR/LLM 请求次数" v={String(report.asr.connectionCount)} />
-          <KV k="失败次数" v={String(report.asr.disconnectCount)} />
-          <KV k="转写缺口" v={String(report.asr.gapCount)} />
           <KV k="分析运行" v={`${report.analysisRuns.success}/${report.analysisRuns.total} 成功`} />
-          <KV k="估算 token" v={String(report.llm.estimatedTokens)} />
+        </div>
+        {/*
+          ASR 连接/断线/缺口与 LLM 请求/失败次数并非来自持久化计数，
+          而是用 analysisRuns 拼出来的近似值——那是把不同口径的数据混在一格里显示，
+          既可能误导用户，也会让导出报告的统计看起来自相矛盾。
+          因此这里改为直接显示"未统计"，并附上一句说明为什么没有，
+          而不是给一个看似精确的数字。
+        */}
+        <div style={{ marginTop: 10, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
+          <div>ASR 连接 / 断线 / 转写缺口：未统计</div>
+          <div>LLM 请求 / 失败次数：未统计</div>
+          <div>
+            这些是 ASR 连接与其底层网络层在本次会话中实时产生的事件，
+            没有被持久化落到数据库，所以无法在事后准确回算。
+            "分析运行"一栏统计的是分析环节本身，与上面这些网络事件不是一个口径。
+          </div>
         </div>
         {report.analysisRuns.failed > 0 ? (
           <div className="callout callout-warn">

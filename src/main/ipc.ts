@@ -12,43 +12,22 @@ import {
   type AsrConfig,
   type LlmConfig,
 } from "../shared/schemas";
-import type { Settings } from "../shared/contracts";
 import { TencentAsrAdapter } from "./asr/tencentAdapter";
 import { buildReportSummary, buildHtmlReport } from "./report/reportBuilder";
 import fs from "node:fs";
 import path from "node:path";
+import { readRuntimeAsrConfig, readRuntimeLlmConfig, withoutCredentials } from "./security/runtimeConfig";
 
 /** Session-scoped test adapter so connect tests never touch the live orchestrator ASR. */
 let testAsr: TencentAsrAdapter | null = null;
 
-/**
- * 读取库里已保存的 ASR 配置（「测试连接」的 useStored 路径用）。
- * 渲染层永远看不到明文：只有主进程从 settings 表读 asr_config。
- */
+/** Compatibility names: public options are saved; credentials come only from env. */
 export function readStoredAsrConfig(store: Store): AsrConfig | null {
-  const raw = store.getSetting("asr_config");
-  if (!raw) return null;
-  try {
-    const parsed = AsrConfigSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  return readRuntimeAsrConfig(store);
 }
 
-/** 读取库里已保存的 LLM 配置（api_key 独立存放，此处回接）。 */
 export function readStoredLlmConfig(store: Store): LlmConfig | null {
-  const settingsRaw = store.getSetting("app_settings");
-  const apiKey = store.getSetting("llm_api_key");
-  if (!settingsRaw || !apiKey) return null;
-  try {
-    const settings = JSON.parse(settingsRaw) as Settings;
-    if (!settings.llm?.base_url || !settings.llm?.model) return null;
-    const parsed = LlmConfigSchema.safeParse({ ...settings.llm, api_key: apiKey });
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  return readRuntimeLlmConfig(store);
 }
 
 /** 连接测试请求是否标记为“使用已保存配置”（界面字段留空但已配置过时）。 */
@@ -191,64 +170,46 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     const raw = store.getSetting("app_settings");
     if (!raw) return {};
     try {
-      return JSON.parse(raw);
+      return withoutCredentials(JSON.parse(raw));
     } catch {
       return {};
     }
   });
 
   ipcMain.handle(IpcChannels.settingsSave, async (_e, rawSettings: unknown) => {
-    const parsed = SettingsSchema.safeParse(rawSettings);
+    const safeInput = withoutCredentials(rawSettings);
+    if (!safeInput || typeof safeInput !== "object") return false;
+    const input = safeInput as Record<string, unknown>;
+    const parsed = SettingsSchema.safeParse({ ...input, asr: undefined });
     if (!parsed.success) return false;
-    const clone = JSON.parse(JSON.stringify(parsed.data));
-    if (clone.llm?.api_key) {
-      store.setSetting("llm_api_key", clone.llm.api_key);
-      delete clone.llm.api_key;
-    }
-    // ASR credentials live in their own key, never inside app_settings
-    if (clone.asr) {
-      const asrParsed = AsrConfigSchema.safeParse(clone.asr);
+    const clone = withoutCredentials(parsed.data) as Record<string, unknown>;
+    if (input.asr !== undefined) {
+      const asrParsed = AsrConfigSchema.omit({ secretId: true, secretKey: true }).safeParse(input.asr);
       if (!asrParsed.success) return false;
-      store.setSetting("asr_config", JSON.stringify(asrParsed.data));
-      delete clone.asr;
+      clone.asr = asrParsed.data;
     }
     store.setSetting("app_settings", JSON.stringify(clone));
     return true;
   });
 
-  // Returns asr config with secrets masked so the settings page can show
-  // "configured" state without exposing values.
+  // Credentials never cross IPC or get written to SQLite.
   ipcMain.handle("settings.getAsrStatus", async () => {
-    const raw = store.getSetting("asr_config");
-    if (!raw) return { configured: false };
-    try {
-      const cfg = JSON.parse(raw) as { secretId?: string; appId?: string };
-      return {
-        configured: true,
-        appId: cfg.appId ?? "",
-        secretIdTail: (cfg.secretId ?? "").slice(-4),
-      };
-    } catch {
-      return { configured: false };
-    }
+    const cfg = readRuntimeAsrConfig(store);
+    return { configured: Boolean(cfg), appId: cfg?.appId ?? "1502622498", source: "environment" };
   });
 
   ipcMain.handle("settings.getLlmStatus", async () => {
-    const raw = store.getSetting("app_settings");
-    const llmKey = store.getSetting("llm_api_key");
+    const cfg = readRuntimeLlmConfig(store);
     let llm: { base_url?: string; model?: string } = {};
-    if (raw) {
-      try {
-        llm = (JSON.parse(raw) as { llm?: { base_url?: string; model?: string } }).llm ?? {};
-      } catch {
-        /* fallthrough */
-      }
-    }
+    try {
+      const raw = store.getSetting("app_settings");
+      llm = raw ? JSON.parse(raw).llm ?? {} : {};
+    } catch { /* keep defaults */ }
     return {
-      configured: Boolean(llm.base_url && llm.model && llmKey),
-      baseUrl: llm.base_url ?? "",
-      model: llm.model ?? "",
-      keyTail: (llmKey ?? "").slice(-4),
+      configured: Boolean(cfg),
+      baseUrl: process.env.DSH_LLM_BASE_URL || llm.base_url || "",
+      model: process.env.DSH_LLM_MODEL || llm.model || "",
+      source: "environment",
     };
   });
 
@@ -260,11 +221,15 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     if (wantsStoredConfig(rawConfig)) {
       const stored = readStoredAsrConfig(store);
       if (!stored) {
-        return { ok: false, error: { code: "ASR_NOT_CONFIGURED", message: "尚未保存 ASR 配置，请先填写三项并保存", retryable: false } };
+        return { ok: false, error: { code: "ASR_NOT_CONFIGURED", message: "尚未配置 ASR 环境凭证，请通过安全配置提供 Secret ID 和 Secret Key 后重启应用", retryable: false } };
       }
       config = stored;
     } else {
-      const parsed = AsrConfigSchema.safeParse(rawConfig);
+      const parsed = AsrConfigSchema.safeParse({
+        ...(typeof rawConfig === "object" && rawConfig !== null ? rawConfig : {}),
+        secretId: process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID ?? "",
+        secretKey: process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY ?? "",
+      });
       if (!parsed.success) {
         return { ok: false, error: { code: "ASR_CONFIG_INVALID", message: "ASR 配置不完整：需要 App ID、Secret ID、Secret Key", retryable: false } };
       }
@@ -301,7 +266,10 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
       }
       config = stored;
     } else {
-      const parsed = LlmConfigSchema.safeParse(rawConfig);
+      const parsed = LlmConfigSchema.safeParse({
+        ...(typeof rawConfig === "object" && rawConfig !== null ? rawConfig : {}),
+        api_key: process.env.DSH_SECRET_LLM_API_KEY ?? "",
+      });
       if (!parsed.success) {
         return { ok: false, error: { code: "LLM_CONFIG_INVALID", message: "LLM 配置不完整：需要 Base URL、模型名、API Key", retryable: false } };
       }

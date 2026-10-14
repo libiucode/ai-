@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -26,9 +26,9 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
         voice_id: "v1",
         audio_duration: 1000,
         result: {
-          slice_seq: 1,
+          index: 1,
           slice_type: 0,
-          result_text: "大家好",
+          voice_text_str: "大家好",
           start_time: 0,
           end_time: 1000,
         },
@@ -36,7 +36,7 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
     );
     expect(r.type).toBe("partial");
     expect(r.text).toBe("大家好");
-    // 中间结果变更（同 seq 不同文本也由 seq 去重逻辑控制，解析本身透传）
+    expect(r.seq).toBe(1);
   });
 
   it("稳态结果 -> final", () => {
@@ -45,9 +45,9 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
         code: 0,
         voice_id: "v1",
         result: {
-          slice_seq: 2,
+          index: 2,
           slice_type: 2,
-          result_text: "大家好欢迎来到直播间",
+          voice_text_str: "大家好欢迎来到直播间",
           start_time: 0,
           end_time: 2000,
         },
@@ -55,12 +55,13 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
     );
     expect(r.type).toBe("final");
     expect(r.text).toBe("大家好欢迎来到直播间");
+    expect(r.seq).toBe(2);
   });
 
   it("重复结果 seq 相同 -> 解析透传由适配器去重", () => {
     const msg = JSON.stringify({
       code: 0,
-      result: { slice_seq: 3, slice_type: 2, result_text: "测试" },
+      result: { index: 3, slice_type: 2, voice_text_str: "测试" },
     });
     expect(parseTencentMessage(msg).seq).toBe(parseTencentMessage(msg).seq);
   });
@@ -73,6 +74,81 @@ describe("腾讯云 ASR 消息解析 fixture", () => {
 
   it("断线/坏 JSON -> ignore", () => {
     expect(parseTencentMessage("not-json").type).toBe("ignore");
+  });
+});
+
+describe("腾讯云真实协议的逐句字幕回归", () => {
+  function setup() {
+    const adapter = new TencentAsrAdapter();
+    const internal = adapter as unknown as {
+      connectionId: string;
+      handleMessage(raw: string): void;
+    };
+    internal.connectionId = "connection-1";
+    const partials: Array<{ sourceSeq: number; text: string }> = [];
+    const finals: Array<{ sourceSeq: number; text: string }> = [];
+    adapter.on("partial", (p) => partials.push(p as typeof partials[number]));
+    adapter.on("final", (p) => finals.push(p as typeof finals[number]));
+    const send = (index: number, sliceType: number, text: string) => internal.handleMessage(JSON.stringify({
+      code: 0,
+      voice_id: "voice-1",
+      result: { index, slice_type: sliceType, voice_text_str: text, start_time: index * 3000, end_time: index * 3000 + 2000 },
+    }));
+    return { internal, partials, finals, send };
+  }
+
+  it("官方示例字段解析出文字、句序号和毫秒时间", () => {
+    const result = parseTencentMessage('{"code":0,"message":"success","voice_id":"RnKu9FODFHK5FPpsrN","message_id":"RnKu9FODFHK5FPpsrN_33_0","result":{"slice_type":2,"index":0,"start_time":0,"end_time":2840,"voice_text_str":"实时语音识别","word_size":0,"word_list":[]}}');
+    expect(result).toMatchObject({ type: "final", seq: 0, text: "实时语音识别", startMs: 0, endMs: 2840 });
+  });
+
+  it("同一句多次更新后仍接收最终字幕，后续句子正常输出", () => {
+    const { send, partials, finals } = setup();
+    send(0, 0, "实时");
+    send(0, 1, "实时语音");
+    send(0, 1, "实时语音识别");
+    send(0, 2, "实时语音识别");
+    send(1, 0, "大家好");
+    send(1, 2, "大家好欢迎来到直播间");
+    expect(partials.map((p) => p.text)).toEqual(["实时", "实时语音", "实时语音识别", "大家好"]);
+    expect(finals).toEqual([
+      expect.objectContaining({ sourceSeq: 0, text: "实时语音识别" }),
+      expect.objectContaining({ sourceSeq: 1, text: "大家好欢迎来到直播间" }),
+    ]);
+  });
+
+  it("重复帧、已定稿句子的更新和旧句帧不重复输出", () => {
+    const { send, partials, finals } = setup();
+    send(0, 1, "测试");
+    send(0, 1, "测试");
+    send(0, 2, "测试");
+    send(0, 2, "测试");
+    send(0, 1, "迟到的更新");
+    send(2, 1, "新句");
+    send(1, 2, "旧句");
+    send(2, 2, "新句");
+    expect(partials.map((p) => p.text)).toEqual(["测试", "新句"]);
+    expect(finals.map((p) => p.text)).toEqual(["测试", "新句"]);
+  });
+
+  it("空结果与握手/结束控制帧不产生空字幕，也不阻挡该句后续结果", () => {
+    const { internal, send, partials, finals } = setup();
+    internal.handleMessage('{"code":0,"message":"success","voice_id":"voice-1"}');
+    send(0, 0, "");
+    send(0, 1, "有效文字");
+    send(0, 2, "有效文字");
+    send(1, 2, "   ");
+    send(1, 2, "下一句");
+    internal.handleMessage('{"code":0,"final":1}');
+    expect(partials.map((p) => p.text)).toEqual(["有效文字"]);
+    expect(finals.map((p) => p.text)).toEqual(["有效文字", "下一句"]);
+  });
+
+  it("没有临时结果时也能直接接收最终字幕", () => {
+    const { send, partials, finals } = setup();
+    send(0, 2, "直接定稿");
+    expect(partials).toEqual([]);
+    expect(finals).toEqual([expect.objectContaining({ sourceSeq: 0, text: "直接定稿" })]);
   });
 });
 
@@ -204,48 +280,56 @@ describe("ASR 连接探测 probe（open 后等服务端裁决）", () => {
   });
 });
 
-describe("已保存配置读取（测试连接的 useStored 路径）", () => {
+describe("公开配置与环境凭证读取（useStored 兼容入口）", () => {
   let dir: string;
   let store: Store;
 
   beforeEach(() => {
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_ID", "");
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_KEY", "");
+    vi.stubEnv("DSH_SECRET_LLM_API_KEY", "");
+    vi.stubEnv("DSH_TENCENT_ASR_APP_ID", "");
+    vi.stubEnv("DSH_LLM_BASE_URL", "");
+    vi.stubEnv("DSH_LLM_MODEL", "");
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "stored-cfg-"));
     store = new Store(path.join(dir, "test.db"));
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     store.close();
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("asr_config 存在 → 解析回配置", () => {
+  it("环境 ASR 凭证 + 公开选项组成配置，不读取旧数据库密钥", () => {
     store.setSetting("asr_config", JSON.stringify(validConfig));
-    expect(readStoredAsrConfig(store)?.appId).toBe("1250000000");
+    store.setSetting("app_settings", JSON.stringify({ asr: { appId: "1250000000" } }));
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_ID", "AKID-unit-env");
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_KEY", "unit-env-key");
+    const cfg = readStoredAsrConfig(store);
+    expect(cfg?.appId).toBe("1250000000");
+    expect(cfg?.secretId).toBe("AKID-unit-env");
+    expect(cfg?.secretKey).toBe("unit-env-key");
   });
 
-  it("asr_config 缺失或损坏 → null", () => {
-    expect(readStoredAsrConfig(store)).toBeNull();
-    store.setSetting("asr_config", "not-json");
+  it("缺环境凭证时即使旧数据库有密钥也返回 null", () => {
+    store.setSetting("asr_config", JSON.stringify(validConfig));
     expect(readStoredAsrConfig(store)).toBeNull();
   });
 
-  it("llm 配置 + api_key 齐全 → 回接出完整配置", () => {
-    store.setSetting(
-      "app_settings",
-      JSON.stringify({ llm: { base_url: "https://api.example.com/v1", model: "gpt-4o-mini" } }),
-    );
-    store.setSetting("llm_api_key", "sk-test-123");
+  it("公开 LLM 配置 + 环境 api_key 组成完整配置", () => {
+    store.setSetting("app_settings", JSON.stringify({ llm: { base_url: "https://api.example.com/v1", model: "gpt-4o-mini" } }));
+    store.setSetting("llm_api_key", "sk-legacy-ignored");
+    vi.stubEnv("DSH_SECRET_LLM_API_KEY", "sk-unit-env");
     const cfg = readStoredLlmConfig(store);
     expect(cfg?.base_url).toBe("https://api.example.com/v1");
     expect(cfg?.model).toBe("gpt-4o-mini");
-    expect(cfg?.api_key).toBe("sk-test-123");
+    expect(cfg?.api_key).toBe("sk-unit-env");
   });
 
-  it("缺 api_key → null（不允许把空 key 当作已配置）", () => {
-    store.setSetting(
-      "app_settings",
-      JSON.stringify({ llm: { base_url: "https://api.example.com/v1", model: "gpt-4o-mini" } }),
-    );
+  it("缺环境 LLM key 返回 null，不回读数据库", () => {
+    store.setSetting("app_settings", JSON.stringify({ llm: { base_url: "https://api.example.com/v1", model: "gpt-4o-mini" } }));
+    store.setSetting("llm_api_key", "sk-legacy-ignored");
     expect(readStoredLlmConfig(store)).toBeNull();
   });
 });

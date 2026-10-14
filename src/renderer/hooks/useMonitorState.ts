@@ -61,12 +61,13 @@ export function useMonitorState() {
     const offs = [
       window.appApi.subscribeEvents("transcript.partial", (seg) => {
         setPartials((prev) => {
-          const next = [...prev, { key: seg.id, text: seg.text }];
+          const next = [...prev.filter((p) => p.key !== seg.id), { key: seg.id, text: seg.text }];
           return next.length > 3 ? next.slice(-3) : next;
         });
       }),
       window.appApi.subscribeEvents("transcript.final", (seg) => {
-        setPartials([]);
+        const partialKey = `partial:${seg.connectionId}:${seg.sourceSeq}`;
+        setPartials((prev) => prev.filter((p) => p.key !== partialKey));
         setFinals((prev) => {
           const next = [...prev, seg];
           return next.length > MAX_VISIBLE_FINALS ? next.slice(-MAX_VISIBLE_FINALS) : next;
@@ -80,6 +81,7 @@ export function useMonitorState() {
         }
       }),
       window.appApi.subscribeEvents("asr.status", (st) => {
+        if (st.state !== "connected") setPartials([]);
         setAsr(st);
         if (st.state === "reconnecting") {
           setHasTranscriptGap(true);
@@ -113,6 +115,7 @@ export function useMonitorState() {
       setPartials([]);
       setIssues([]);
       setErrors([]);
+      setAnalysis(null);
       setScript(null);
       setHasTranscriptGap(false);
       setLastFinalAt(null);
@@ -121,16 +124,18 @@ export function useMonitorState() {
         if (result.error) {
           setErrors((prev) => [result.error!, ...prev]);
           setUiState("error");
-          return;
+          return false;
         }
         setSessionId(result.sessionId);
         setSessionStartedAt(new Date().toISOString());
         setUiState("capturing");
+        return true;
       } catch (err) {
         setErrors([
           { code: "UI_START_FAILED", message: err instanceof Error ? err.message : "启动失败", retryable: false },
         ]);
         setUiState("error");
+        return false;
       }
     },
     [setUiState],
