@@ -1,7 +1,7 @@
 # 「长期无音频自动结束」阈值评估（只读分析，零 ASR 额度）
 
 - 时间：2026-10-15 00:1x（**2026-10-15 00:4x 修订**，见 §0.1）
-- 分支：`fix/real-asr-lvl1`；HEAD `4b5ff1d`
+- 分支：`fix/real-asr-lvl1`；HEAD `0d7b9f6`（撰写基线 `4b5ff1d`）
 - 数据来源：`live-monitor.db` 已有会话，**未新采任何音频、未消耗任何 ASR 额度**
 - 分析脚本：`scripts/analyze-silence.cjs`（静默分布）、`scripts/analyze-boundary.cjs`（污染边界复核）
 

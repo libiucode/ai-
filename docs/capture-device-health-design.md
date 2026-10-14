@@ -3,9 +3,14 @@
 > **本轮只出设计，未改代码。** 由「设备切换是否导致静默失效」这一问题转化而来：
 > 负责人判断「不需要复现失败，应该去检测它」，本文给出检测设计。
 >
-> - 时间：2026-10-14 23:5x
-> - HEAD commit：`4b5ff1d3cd637b086649ae95b11481d78f3ec232`（分支 `fix/real-asr-lvl1`）
-> - 范围：`src/main/capture/`、`src/renderer/capture/`（设计）；跨范围部分已标注归属
+> - 时间：2026-10-14 23:5x（设计）；实现与判据修订于 2026-10-15 00:2x
+> - HEAD commit：`0d7b9f6672c4be4c01581eeee1553b960b3251ff`（分支 `fix/real-asr-lvl1`；设计撰写基线为 `4b5ff1d`）
+> - 范围：`src/main/capture/`、`src/renderer/capture/`（设计 + 实现）；跨范围部分已标注归属
+>
+> ⚠️ **本文的 L4 `stalled` 判据已修订**：原设计用「`onaudioprocess` 回调停更 ≥ 3s」，
+> 该判据**已废弃**（静默时回调本来就会变慢，与 `silent` 无法区分，是误判隐患）。
+> 现行实现改读 `AudioContext.state`（`suspended`/`interrupted`）。
+> 修订原因与教训见 `docs/lessons-false-positive-outage.md`。
 
 ---
 
