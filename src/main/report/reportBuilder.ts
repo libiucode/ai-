@@ -223,8 +223,47 @@ function scriptSection(report: ReportSummary): string {
 </table>`;
 }
 
+/**
+ * 样本标注：仅验证脚本会传；主进程正常导出报告不传，行为完全不变。
+ * 目的是让 HTML（给人直接双击打开的工件）也带上样本性质与污染边界，
+ * 避免「纯 TTS 样本」被当成真实直播引用——这类样本一旦被隐藏性质，
+ * 比数字算错更危险。
+ */
+export interface SampleAnnotation {
+  sampleNature: string;
+  sourceLabel: string;
+  boundaryNote: string;
+  /** 该样本是否可当作干净直播引用；false 时用醒目警示色 */
+  usableAsLiveSample: boolean;
+}
+
+const NATURE_LABEL: Record<string, string> = {
+  "clean-live-stream": "干净真实直播",
+  "advertisement-voiceover": "广告口播",
+  "tts-voiceover": "纯 TTS 口播",
+  mixed: "混合来源",
+  unknown: "性质未知",
+};
+
+/** 渲染样本性质警示条；未传标注时返回空字符串（既有调用行为不变）。 */
+function sampleBanner(annotation?: SampleAnnotation): string {
+  if (!annotation) return "";
+  const label = NATURE_LABEL[annotation.sampleNature] ?? annotation.sampleNature;
+  const danger = !annotation.usableAsLiveSample;
+  const bg = danger ? "#fef2f2" : "#f0fdf4";
+  const border = danger ? "#b91c1c" : "#15803d";
+  const title = danger
+    ? `⚠ 样本性质：${esc(label)} —— 不得作为「真实直播」引用`
+    : `样本性质：${esc(label)}`;
+  return `<div style="border:2px solid ${border};background:${bg};padding:12px 14px;margin:0 0 16px;border-radius:6px;">
+<div style="font-weight:bold;color:${border};margin-bottom:6px;">${title}</div>
+<div class="kv" style="color:#333;">来源：${esc(annotation.sourceLabel)}</div>
+<div class="kv" style="color:#333;margin-top:6px;">样本边界：${esc(annotation.boundaryNote)}</div>
+</div>`;
+}
+
 /** Renders the HTML report from real report data. */
-export function buildHtmlReport(report: ReportSummary): string {
+export function buildHtmlReport(report: ReportSummary, annotation?: SampleAnnotation): string {
   const rows = report.issueTimeline
     .map(
       (i) => `<tr>
@@ -239,11 +278,12 @@ export function buildHtmlReport(report: ReportSummary): string {
     )
     .join("\n");
 
+  const natureLabel = annotation ? (NATURE_LABEL[annotation.sampleNature] ?? annotation.sampleNature) : null;
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>盯播报告 ${esc(report.session.id.slice(0, 8))}</title>
+<title>盯播报告 ${esc(report.session.id.slice(0, 8))}${natureLabel ? ` · ${esc(natureLabel)}` : ""}</title>
 <style>
 body { font-family: "Microsoft YaHei", sans-serif; margin: 24px auto; max-width: 1100px; color: #222; }
 table { border-collapse: collapse; width: 100%; margin: 12px 0; }
@@ -257,6 +297,7 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
 </style>
 </head>
 <body>
+${sampleBanner(annotation)}
 <h1>AI 盯播直播报告</h1>
 <p class="kv">
 会话 ${esc(report.session.id)} · 开始 ${esc(report.session.startedAtIso)} ·

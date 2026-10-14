@@ -1,11 +1,18 @@
 {
-  "verificationKind": "operator-confirmed-real-asr-window-live-llm",
+  "verificationKind": "real-asr-window-live-llm",
   "executedAtIso": "2026-10-14T15:59:36.327Z",
   "semanticAnalysisRan": true,
   "semanticAnalysisNote": "真实LLM已调用",
-  "sourceLabel": "CCTV-13 real live stream via system loopback",
+  "sourceLabel": "公开转播源上的降糖保健品广告口播（流标签 cctv13hd.m3u8，但内容非新闻、非电视节目）",
   "sourceSessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
-  "sourceConfirmation": "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
+  "sampleNature": "advertisement-voiceover",
+  "sampleBoundary": {
+    "cleanRangeMs": { "startMs": 0, "endMs": 124800 },
+    "note": "该会话总长 742400ms。0~124800ms 为降糖保健品广告口播（干净）；124400~174200ms 完全无音频（maxGapMs=49800，干净音源已停、TTS 未起）；174200ms 之后为带货 TTS（实质内容自 208580ms 起）。本窗口 0~125000ms 与干净区间 0~124800ms 基本重合，仅尾部 200ms 越界，4 条片段实际止于 124780ms，未取到 TTS 内容。引用本报告必须连同本字段引用；只写 sessionId 的引用无效。",
+    "windowWithinCleanRange": false
+  },
+  "labelCorrection": "原 sourceLabel 为 “CCTV-13 real live stream via system loopback”，与实测内容不符（实为广告口播），已按 evidence/session-profiles.json 更正。",
+  "sourceConfirmation": "由操作人员确认转写来自真实 ASR；该确认不表示内容性质是带货直播，内容性质见 sampleNature",
   "window": {
     "startMs": 0,
     "endMs": 125000

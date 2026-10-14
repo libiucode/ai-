@@ -99,6 +99,24 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
 
   useEffect(() => () => captureRef.current?.stop(), []);
 
+  /**
+   * 会话结束（手点或自动）时必须真的停掉采集句柄。
+   *
+   * 自动结束（排期到点）与手点结束在这一点上必须一致：主进程 stop() 会断 ASR、
+   * 落库 stopped，但**渲染层的 ScriptProcessor 不会自己停**——不显式 stop，
+   * 音频仍会继续发往主进程（被丢弃），电平条继续跳动，界面看起来还在录。
+   * 这正是"绝不能让界面假装还在工作"要防的情况。
+   */
+  useEffect(() => {
+    const ended = mon.sessionState === "completed" || mon.sessionState === "idle";
+    if (ended && captureRef.current) {
+      captureRef.current.stop();
+      captureRef.current = null;
+      setLevel(0);
+      setSilenceWarning(false);
+    }
+  }, [mon.sessionState]);
+
   const active = ["starting", "capturing", "reconnecting", "analyzing"].includes(mon.sessionState);
 
   /**
@@ -366,23 +384,33 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
             本场的排期结束时刻：与「下次自动开始」相反，这条只在会话进行中出现。
             必须显示，否则用户看到会话自己停了会以为是故障——自动结束的可见性
             是这套机制能否被信任的前提。
+
+            暂停态只显示静态时刻、不显示倒计时：主进程的 checkScheduledEnd 只在
+            active 时被调用，暂停期间根本不会到点结束。此时显示"30 分钟后结束"
+            等于承诺一件暂停期间不会发生的事。
           */}
           {mon.scheduleStatus?.scheduledEndAtIso && (active || mon.sessionState === "paused") ? (
             <span className="chip">
               <span className="chip-k">排期结束</span>
               {new Date(mon.scheduleStatus.scheduledEndAtIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              （{formatCountdown(new Date(mon.scheduleStatus.scheduledEndAtIso), new Date(now))}）
+              {mon.sessionState === "paused"
+                ? <span className="chip-k">（暂停期间不计入）</span>
+                : `（${formatCountdown(new Date(mon.scheduleStatus.scheduledEndAtIso), new Date(now))}）`}
             </span>
           ) : null}
         </div>
 
-        {/* 排期已启用但「自动开始」未接通，必须让用户看见，而不是等到点没动静才发现 */}
+        {/* 排期能力现状：两项能力状态不同，必须并列写清，不能把"未"和"已"塞进同一句 */}
         {schedule?.enabled && !active && mon.sessionState !== "paused" ? (
           <div className="callout callout-warn">
-            ⚠ 已配置定时监听，但<b>自动开始尚未接通</b>（系统声音采集需当次手动授权）。
-            到点不会自动录制，请手动点「监听系统声音」。
-            <br />
-            <b>到点自动结束已接通</b>：在排期时段内开始的会话，会在结束时刻自动收尾并提示原因。
+            <b>定时监听能力现状：</b>
+            <div style={{ marginTop: 4 }}>
+              到点自动开始 —— <b>未接通</b>（系统声音采集需当次手动授权，程序无法自行触发）
+            </div>
+            <div>
+              到点自动结束 —— <b>已接通</b>（在排期时段内开始的会话，会在结束时刻自动收尾并说明原因）
+            </div>
+            <div style={{ marginTop: 4 }}>因此目前请手动点「监听系统声音」开始。</div>
           </div>
         ) : null}
 

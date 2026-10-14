@@ -23,7 +23,12 @@ describe("真实窗口验证脚本（以下来源库与服务均为模拟）", (
     source.insertSegment({ id: "source-seg", sessionId: "source-fixture", connectionId: "source-connection", sourceSeq: 0, startMs: 0, endMs: 5000, text: "这是500毫升的杯子", isFinal: true, createdAt: "2026-10-14T13:00:05Z" });
     source.insertSpeechInterval({ id: "speech", sessionId: "source-fixture", startMs: 0, endMs: 5000 });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ issues: [{ type: "other", severity: "info", segmentIds: ["source-seg"], quote: "500毫升", basis: "fixture only", recommendation: "fixture only", confidence: 0.9, needsReview: true }] }) } }] }) }));
-    const result = await verifyRealWindow({ dbPath, outputPath, sessionId: "source-fixture", windowEndMs: 60000, confirmedRealAsr: true, sourceLabel: "脚本单测模拟来源，非真实录音" });
+    const fixtureBoundary = {
+      cleanRangeMs: { startMs: 0, endMs: 60000 },
+      note: "脚本单测模拟样本，非真实录音；干净区间仅供测试",
+      windowWithinCleanRange: true,
+    };
+    const result = await verifyRealWindow({ dbPath, outputPath, sessionId: "source-fixture", windowEndMs: 60000, confirmedRealAsr: true, sourceLabel: "脚本单测模拟来源，非真实录音", sampleNature: "unknown", sampleBoundary: fixtureBoundary });
     expect(result).toMatchObject({ status: "success", issueCount: 1, allEvidenceValid: true, requestCount: 1, transcriptSegmentCount: 1 });
     expect(source.analysisRunStats("source-fixture").total).toBe(0);
     expect(source.listIssues("source-fixture")).toEqual([]);
@@ -34,7 +39,7 @@ describe("真实窗口验证脚本（以下来源库与服务均为模拟）", (
   });
   it("没有来源确认或正整数窗口时不发送请求", async () => {
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
-    const opts = { dbPath: "absent.db", outputPath: "absent.json", sessionId: "unknown", windowEndMs: 60000, confirmedRealAsr: false, sourceLabel: "" };
+    const opts = { dbPath: "absent.db", outputPath: "absent.json", sessionId: "unknown", windowEndMs: 60000, confirmedRealAsr: false, sourceLabel: "", sampleNature: "unknown" as const, sampleBoundary: { cleanRangeMs: null, note: "参数校验用例", windowWithinCleanRange: false } };
     await expect(verifyRealWindow(opts)).rejects.toThrow("真实ASR来源");
     await expect(verifyRealWindow({ ...opts, confirmedRealAsr: true, sourceLabel: "模拟测试", windowEndMs: -1 })).rejects.toThrow("正的会话相对毫秒数");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -53,7 +58,7 @@ describe("真实窗口验证脚本（以下来源库与服务均为模拟）", (
     source.insertSpeechInterval({ id: "lock-speech", sessionId: "lock-fixture", startMs: 0, endMs: 5000 });
     // 公开设置里是另一个端点，安全密钥属于锁定端点：必须先确认，不得发送。
     source.setSetting("app_settings", JSON.stringify({ llm: { base_url: "https://api.example.invalid/v1", model: "some-other-model" } }));
-    await expect(verifyRealWindow({ dbPath, outputPath, sessionId: "lock-fixture", windowEndMs: 60000, confirmedRealAsr: true, sourceLabel: "模拟测试来源" })).rejects.toThrow(/不一致/);
+    await expect(verifyRealWindow({ dbPath, outputPath, sessionId: "lock-fixture", windowEndMs: 60000, confirmedRealAsr: true, sourceLabel: "模拟测试来源", sampleNature: "unknown", sampleBoundary: { cleanRangeMs: null, note: "模拟测试样本", windowWithinCleanRange: false } })).rejects.toThrow(/不一致/);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fs.existsSync(outputPath)).toBe(false);
     source.close();

@@ -29,12 +29,38 @@ export function assertLockedLlmTarget(config: { base_url: string; model: string 
   }
 }
 
+/** 样本性质：必须显式声明，不得用「真实直播流」这类笼统措辞掩盖实际内容。 */
+export type SampleNature =
+  | "clean-live-stream"
+  | "advertisement-voiceover"
+  | "tts-voiceover"
+  | "mixed"
+  | "unknown";
+
+export interface SampleBoundary {
+  /** 干净（可用）区间，会话相对毫秒；无干净区间时为 null */
+  cleanRangeMs: { startMs: number; endMs: number } | null;
+  /** 说明该会话的污染或性质切换情况 */
+  note: string;
+  /** 本次分析窗口是否完全落在干净区间内 */
+  windowWithinCleanRange: boolean;
+}
+
 export interface RealWindowOptions {
   dbPath: string;
   sessionId: string;
   windowEndMs: number;
   outputPath: string;
   sourceLabel: string;
+  /** 本窗口样本的真实性质；用于报告如实标注，必填。 */
+  sampleNature: SampleNature;
+  /** 样本性质与污染边界的文字说明；必填，避免只写 sessionId。 */
+  sampleBoundary: SampleBoundary;
+  /**
+   * 操作人员确认「这是真实 ASR 产出」。
+   * 注意：它只确认「转写来自真实 ASR」，**不确认内容性质是带货直播**——
+   * 内容性质一律由 sampleNature 决定，二者不可混为一谈。
+   */
   confirmedRealAsr: boolean;
   frameworkId?: string;
   /**
@@ -52,6 +78,26 @@ export interface RealWindowOptions {
 export async function verifyRealWindow(options: RealWindowOptions) {
   if (!options.confirmedRealAsr || !options.sourceLabel.trim()) throw new Error("必须由操作人员确认真实ASR来源，并提供source-label；不得以模拟文字冒充真实转写");
   if (!Number.isInteger(options.windowEndMs) || options.windowEndMs <= 0) throw new Error("end-ms必须为正的会话相对毫秒数");
+  // 样本性质必须显式声明：禁止用「真实直播流」这类措辞掩盖实际是广告口播或 TTS 的事实。
+  if (!options.sampleNature) throw new Error("必须提供 sampleNature（clean-live-stream / advertisement-voiceover / tts-voiceover / mixed / unknown）");
+  if (!options.sampleBoundary?.note?.trim()) throw new Error("必须提供 sampleBoundary.note，说明样本性质与污染边界；只写 sessionId 的引用视为无效");
+  const windowStartMsForCheck = Math.max(0, options.windowEndMs - 300000);
+  const clean = options.sampleBoundary.cleanRangeMs;
+  const windowWithinClean = !clean
+    ? false
+    : windowStartMsForCheck >= clean.startMs && options.windowEndMs <= clean.endMs;
+  options = {
+    ...options,
+    sampleBoundary: {
+      ...options.sampleBoundary,
+      windowWithinCleanRange: windowWithinClean,
+      // 只要未完全落在干净区间内，就必须带警示——不论声明的是什么性质，
+      // 避免「声明成干净直播」就把越界事实盖过去。
+      note: windowWithinClean
+        ? options.sampleBoundary.note
+        : `${options.sampleBoundary.note}｜注意：本窗口(${windowStartMsForCheck}~${options.windowEndMs}ms)未完全落在干净区间内，结论不得表述为干净直播样本`,
+    },
+  };
   const sourcePath = path.resolve(options.dbPath);
   const outputPath = path.resolve(options.outputPath);
   if ([outputPath, `${outputPath}.html`].some((p) => p.toLowerCase() === sourcePath.toLowerCase())) throw new Error("输出路径不得覆盖来源数据库");
@@ -132,13 +178,19 @@ export async function verifyRealWindow(options: RealWindowOptions) {
       ? "本次没有任何问题通过证据校验（可能为0问题、也可能被门禁全部拒绝），无可验证样本，不能据此宣称证据校验通过"
       : `已校验 ${checkedIssueCount} 条问题，无效 ${invalidIssueCount} 条`;
     const result = {
-      verificationKind: config ? "operator-confirmed-real-asr-window-live-llm" : "operator-confirmed-real-asr-window-rules-only",
+      // 不再用 operator-confirmed-real-... 这类暗示真实直播的笼统标签：
+      // 「确认真实 ASR」≠「内容是带货直播」，两者必须分开表述。
+      verificationKind: config ? "real-asr-window-live-llm" : "real-asr-window-rules-only",
       executedAtIso: new Date().toISOString(),
       semanticAnalysisRan: !!config,
       semanticAnalysisNote: config ? "真实LLM已调用" : "未调用LLM（无安全密钥或显式--skip-llm）：本结果只覆盖规则引擎与证据校验，不构成真实LLM验收",
       sourceLabel: options.sourceLabel,
       sourceSessionId: options.sessionId,
-      sourceConfirmation: "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
+      /** 本窗口样本的真实性质；由调用方显式声明，非推断。 */
+      sampleNature: options.sampleNature,
+      /** 样本性质与污染边界；引用本报告必须连同该字段一起引用。 */
+      sampleBoundary: options.sampleBoundary,
+      sourceConfirmation: "由操作人员确认转写来自真实 ASR；该确认不表示内容性质是带货直播，内容性质见 sampleNature",
       window: { startMs: windowStartMs, endMs: options.windowEndMs },
       model: config?.model ?? null,
       lockedTarget: { base_url: LOCKED_LLM_BASE_URL, model: LOCKED_LLM_MODEL },
@@ -155,7 +207,15 @@ export async function verifyRealWindow(options: RealWindowOptions) {
     const redactText = (text: string) => (config ? text.replaceAll(config.api_key, "[REDACTED]") : text);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, redactText(JSON.stringify(result, null, 2)), "utf8");
-    fs.writeFileSync(`${outputPath}.html`, redactText(buildHtmlReport(report)), "utf8");
+    // HTML 是给人直接双击打开的工件：必须同样带上样本性质与边界，
+    // 否则「纯 TTS 样本」在报告里看起来和真实直播报告没有区别。
+    const annotation = {
+      sampleNature: options.sampleNature,
+      sourceLabel: options.sourceLabel,
+      boundaryNote: options.sampleBoundary.note,
+      usableAsLiveSample: options.sampleNature === "clean-live-stream" && options.sampleBoundary.windowWithinCleanRange,
+    };
+    fs.writeFileSync(`${outputPath}.html`, redactText(buildHtmlReport(report, annotation)), "utf8");
     return { outputPath, htmlPath: `${outputPath}.html`, status: runs[0]?.status ?? "unknown", requestCount: llm.budgetUsed, transcriptSegmentCount: segments.length, issueCount: shown.length, allEvidenceValid };
   } finally { memory.close(); source.close(); }
 }
@@ -173,6 +233,15 @@ if (require.main === module) {
     windowEndMs: Number(cliValue(argv, "--end-ms")),
     outputPath: cliValue(argv, "--output"),
     sourceLabel: cliValue(argv, "--source-label"),
+    // 样本性质必填；干净区间可选（--clean-start-ms/--clean-end-ms 同时给才生效）。
+    sampleNature: cliValue(argv, "--sample-nature") as SampleNature,
+    sampleBoundary: {
+      cleanRangeMs: argv.includes("--clean-start-ms") && argv.includes("--clean-end-ms")
+        ? { startMs: Number(cliValue(argv, "--clean-start-ms")), endMs: Number(cliValue(argv, "--clean-end-ms")) }
+        : null,
+      note: cliValue(argv, "--sample-note"),
+      windowWithinCleanRange: false, // 由 verifyRealWindow 按实际窗口计算后覆盖
+    },
     confirmedRealAsr: argv.includes("--confirm-real-asr"),
     frameworkId: argv.includes("--framework-id") ? cliValue(argv, "--framework-id") : undefined,
     frameworkJsonPath: argv.includes("--framework-json") ? cliValue(argv, "--framework-json") : undefined,

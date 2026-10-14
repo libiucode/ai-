@@ -1,11 +1,18 @@
 {
-  "verificationKind": "operator-confirmed-real-asr-window-live-llm",
+  "verificationKind": "real-asr-window-live-llm",
   "executedAtIso": "2026-10-14T16:09:27.051Z",
   "semanticAnalysisRan": true,
   "semanticAnalysisNote": "真实LLM已调用",
-  "sourceLabel": "真实直播流经系统回环采集（10分钟窗口）",
+  "sourceLabel": "纯中文 TTS 带货口播（非真实直播；全库核查：49 条命中 TTS 特征，其余 9 条人眼核对亦为 TTS）",
   "sourceSessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
-  "sourceConfirmation": "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
+  "sampleNature": "tts-voiceover",
+  "sampleBoundary": {
+    "cleanRangeMs": null,
+    "note": "该会话为纯 TTS 口播，不存在干净真实直播区间（cleanRangeMs=null）。本窗口 300000~600000ms，实际取到 30 条片段，时间范围 291120~573780ms，全部为 TTS 内容。本结果只能表述为「中文 TTS 口播场景」，不得表述为真实直播验证。引用本报告必须连同本字段引用；只写 sessionId 的引用无效。",
+    "windowWithinCleanRange": false
+  },
+  "labelCorrection": "原 sourceLabel 为「真实直播流经系统回环采集（10分钟窗口）」，与样本实际性质（纯 TTS）不符，已按 evidence/session-profiles.json 更正。",
+  "sourceConfirmation": "由操作人员确认转写来自真实 ASR；该确认不表示内容性质是带货直播，内容性质见 sampleNature",
   "window": {
     "startMs": 300000,
     "endMs": 600000

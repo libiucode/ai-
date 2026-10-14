@@ -9,6 +9,11 @@ import type {
   TranscriptSegment,
 } from "../../shared/contracts";
 import type { AnalysisStatusLike, RendererAppApi } from "../../shared/api";
+import {
+  isAutoEndedError,
+  nextStateOnAutoEnded,
+  nextStateOnCaptureIdle,
+} from "./sessionEnd";
 
 declare global {
   interface Window {
@@ -82,6 +87,14 @@ export function useMonitorState() {
         if (sessionStateRef.current === "capturing" && st.state === "paused") {
           setUiState("paused");
         }
+        // 采集回到 idle 只有一条路径：主进程 stop()。此时会话已在主进程侧结束。
+        // 若界面还以为在监听（capturing/analyzing/reconnecting），说明收到了
+        // 一条我们没预料到的结束信号（例如主进程侧另有触发者），
+        // 此时必须让状态机落地到 completed，否则界面会一直假装在录。
+        if (st.state === "idle") {
+          const next = nextStateOnCaptureIdle(sessionStateRef.current);
+          if (next !== sessionStateRef.current) setUiState(next);
+        }
       }),
       window.appApi.subscribeEvents("asr.status", (st) => {
         if (st.state !== "connected") setPartials([]);
@@ -109,6 +122,15 @@ export function useMonitorState() {
       }),
       window.appApi.subscribeEvents("app.error", (err) => {
         setErrors((prev) => [err, ...prev].slice(0, 20));
+        // 自动结束（排期到点等）由主进程通过 app.error 通知。
+        // 这条必须驱动状态机——否则会话在后台已停、界面仍显示「监听中」、
+        // 采集句柄还在喂音频，正是最不该出现的「假装在录」。
+        // 与手点结束走同一个收尾状态（completed），保证两条路径收敛一致。
+        if (isAutoEndedError(err.code)) {
+          setScheduleStatus({ scheduledEndAtIso: null });
+          const next = nextStateOnAutoEnded(sessionStateRef.current);
+          if (next !== sessionStateRef.current) setUiState(next);
+        }
       }),
     ];
     return () => offs.forEach((off) => off());
