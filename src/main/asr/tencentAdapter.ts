@@ -91,6 +91,8 @@ export class TencentAsrAdapter implements AsrAdapter {
   private lastSeqSeen = -1;
   private lastFinalSeq = -1;
   private lastPartialKey: string | null = null;
+  /** 最近一次服务端错误帧的业务码（如 4008 空闲超时），随 close 一并上报用于诊断。 */
+  private lastServerErrorCode: number | null = null;
 
   getConnectionId(): string | null {
     return this.connectionId;
@@ -155,6 +157,7 @@ export class TencentAsrAdapter implements AsrAdapter {
     this.lastSeqSeen = -1;
     this.lastFinalSeq = -1;
     this.lastPartialKey = null;
+    this.lastServerErrorCode = null;   // 新连接重置：避免上一连接的错误码串到下一次诊断
 
     const { url } = buildTencentAsrUrl({
       appId: this.config.appId,
@@ -210,19 +213,31 @@ export class TencentAsrAdapter implements AsrAdapter {
         }
       });
 
-      ws.on("close", () => {
+      ws.on("close", (code: number, reason: Buffer) => {
         if (!settled) {
           settled = true;
           reject(makeError("ASR_WS_CLOSED", "ASR 连接被关闭", true));
         }
         if (this.ws !== ws) return;
         this.ws = null;
+        // 保留关闭码与原因：这是判断「谁断的、为什么断」的第一手信息。
+        // 2026-10-15 排查事故时发现：原实现丢弃了 code/reason，导致只能靠
+        // 数据库侧的会话状态反推根因，绕了一大圈。关闭码含义：
+        //   1000 正常关闭 / 1006 异常断开（无关闭帧，常见于网络中断）
+        //   1006 且 shouldRun=true 说明服务端或链路异常，该重连
+        // 服务端主动关闭时腾讯云会在关闭前的错误帧里给出业务码（如 4008 空闲超时）。
+        const closeReason = reason && reason.length ? reason.toString("utf8") : "";
+        const lastSrvCode = this.lastServerErrorCode;
+        this.lastServerErrorCode = null;
         // 主动断开/掉线：标记转写缺口。orchestrator 会把这个标记透传给 UI 与
         // SessionSummary.hasGap，让用户知道这段时间没有转写，而不是让旧字幕
         // 冒充最新结果。方案第 16 节验收标准第 6 条要求断线有明确状态。
         this.emit("status", {
           state: this.shouldRun ? "reconnecting" : "closed",
           gapDetected: true,
+          closeCode: code,
+          closeReason: closeReason || undefined,
+          lastServerErrorCode: lastSrvCode ?? undefined,
         });
         if (this.shouldRun) this.scheduleReconnect();
       });
@@ -257,6 +272,8 @@ export class TencentAsrAdapter implements AsrAdapter {
     const parsed = parseTencentMessage(raw);
     if (!this.connectionId) return;
     if (parsed.type === "error") {
+      // 记住服务端业务码：它解释了随后的 close（如 4008 = 空闲超时被服务端掐断）。
+      this.lastServerErrorCode = parsed.code ?? null;
       this.emit("error", {
         error: makeError(
           `ASR_REMOTE_${parsed.code}`,

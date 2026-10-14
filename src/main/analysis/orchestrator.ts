@@ -16,10 +16,15 @@ import type {
   AudioStatus,
   Framework,
   Issue,
+  ScheduleStatus,
   ScriptStatus,
+  SessionEndReason,
 } from "../../shared/contracts";
 import type { Settings, StartSessionConfig } from "../../shared/schemas";
 import { makeError } from "../security/errorFactory";
+import { scheduledEndAt } from "../../shared/schedule";
+
+const PRE_START_BUFFER_MS = 3000;
 
 export class SessionOrchestrator {
   private store: Store;
@@ -31,11 +36,19 @@ export class SessionOrchestrator {
   private llm = new LlmClient();
   private scheduler: WindowScheduler | null = null;
   private scriptState = new ScriptLoopState();
-  /** 会话使用的话术框架（启动时缓存，每个分析窗口刷新，保存后下一窗生效） */
+  /** 会话使用的话术框架（启动时缓存，每个分析窗口复用） */
   private framework: Framework | null = null;
+  /** 会话绑定的框架 ID，供报告和切换使用 */
+  private frameworkId: string | null = null;
   private slicer = new PcmResamplerSlicer();
   private tickTimer: NodeJS.Timeout | null = null;
   private pendingPackets: AudioPacket[] = [];
+  /** 会话已建立但尚未 active 期间缓冲的原始音频（有界，见 PRE_START_BUFFER_MS）。 */
+  private preStartSamples: number[] = [];
+  private preStartSampleRate = 16000;
+  private preStartDroppedSamples = 0;
+  /** 本段就绪缓冲的起始墙钟时间：用于判定缓冲是否已过期（不能灌入后续会话）。 */
+  private preStartBufferedAt = 0;
   private asrAudioStartMs = 0;
   private asrAudioStarted = false;
   private finalCount = 0;
@@ -46,6 +59,10 @@ export class SessionOrchestrator {
   /** 同一错误码在会话内只提示一次，避免重复 callout 刷屏。 */
   private notifiedErrorCodes = new Set<string>();
   private lastErrorCode: string | null = null;
+  /** 本次会话的排期结束时刻（epoch ms）。null 表示不按排期结束。 */
+  private scheduledEndAtMs: number | null = null;
+  /** 最近一次结束的原因，供快照与测试读取。 */
+  private lastEndReason: SessionEndReason | null = null;
   private audioStatus: AudioStatus = {
     state: "idle",
     source: null,
@@ -88,6 +105,73 @@ export class SessionOrchestrator {
     });
   }
 
+  /**
+   * 选定会话使用的话术框架。
+   * 指定 frameworkId：精确匹配；找不到时回退第一个并保留原因，避免会话直接不可用。
+   * 未指定：第一个框架（兼容既有单框架行为）。
+   */
+  private resolveFramework(config: StartSessionConfig): Framework | null {
+    const all = this.store.listFrameworks();
+    // frameworkId 已进 shared 契约（StartSessionConfig），不再需要运行时强转兼容。
+    const frameworkId = typeof config.frameworkId === "string" && config.frameworkId ? config.frameworkId : null;
+    if (frameworkId) {
+      const found = all.find((f) => f.id === frameworkId);
+      if (found) return found;
+      this.emit("app.error", makeError(
+        "FRAMEWORK_NOT_FOUND",
+        `指定话术框架不存在（${frameworkId}），已回退到「${all[0]?.name ?? "无"}」`,
+        false,
+      ));
+      return all[0] ?? null;
+    }
+    return all[0] ?? null;
+  }
+
+  /** 当前会话生效的话术框架（多商品自播可在会话中切换）。 */
+  get activeFramework(): Framework | null {
+    return this.framework;
+  }
+
+  get activeFrameworkId(): string | null {
+    return this.frameworkId;
+  }
+
+  /**
+   * 会话中切换话术框架（自播一天播多个商品）。
+   * 切换后下一分析窗口生效；同时重置话术阶段状态，避免用旧框架的阶段判断新商品。
+   * 找到返回 true，找不到返回 false 且不改动当前框架。
+   */
+  switchFramework(frameworkId: string): boolean {
+    const found = this.store.listFrameworks().find((f) => f.id === frameworkId);
+    if (!found) return false;
+    this.framework = found;
+    this.frameworkId = found.id;
+    this.scriptState.reset(this.nowMs());
+    this.previousFrameworkState = undefined;
+    // 落库：历史会话导出时 activeFramework 已不存在，必须靠会话记录追溯当时用的框架。
+    // 落库失败不影响本次切换在内存中生效，但要如实提示，不能静默失追溯。
+    if (this.sessionId) {
+      try {
+        const ok = this.store.updateSessionFramework(this.sessionId, found.id);
+        if (!ok) {
+          this.emit("app.error", makeError(
+            "FRAMEWORK_PERSIST_FAILED",
+            `话术框架已切换为「${found.name}」，但会话记录未能更新，历史报告可能显示旧框架`,
+            false,
+          ));
+        }
+      } catch {
+        this.emit("app.error", makeError(
+          "FRAMEWORK_PERSIST_FAILED",
+          `话术框架已切换为「${found.name}」，但会话记录写入失败，历史报告可能显示旧框架`,
+          true,
+        ));
+      }
+    }
+    this.emitScriptStatus();
+    return true;
+  }
+
   setWindow(win: BrowserWindow | null) {
     this.win = win;
   }
@@ -104,6 +188,23 @@ export class SessionOrchestrator {
 
   get sessionIsActive(): boolean {
     return this.status === "active" || this.status === "paused" || this.status === "stopping";
+  }
+
+  /**
+   * 到点结束检查（每秒由 tickTimer 调用）。
+   *
+   * 为什么不用 setTimeout：会话可能被暂停/恢复，绝对时刻的定时器在暂停期间
+   * 仍然会到点——那会在用户手动暂停后突然把它结束掉。用轮询 + 状态判断，
+   * 只在 active 时生效，语义与「排期窗口结束了」一致。
+   */
+  private checkScheduledEnd(): void {
+    if (this.scheduledEndAtMs === null) return;
+    if (Date.now() < this.scheduledEndAtMs) return;
+    // 先清空再 stop：stop() 是异步的，不清空的话下一次 tick 会重复触发。
+    this.scheduledEndAtMs = null;
+    void this.stop("schedule-window-end").catch(() => {
+      /* stop 内部已尽力收尾 */
+    });
   }
 
   async start(config: StartSessionConfig): Promise<{ sessionId: string; error: AppError | null }> {
@@ -125,9 +226,19 @@ export class SessionOrchestrator {
     this.previousFrameworkState = undefined;
     this.llm = new LlmClient();
     this.scriptState.reset(0);
-    this.framework = this.store.listFrameworks()[0] ?? null;
+    // 多话术框架：会话开始时按 config.frameworkId 选定一次并固定；
+    // 未指定时回退到第一个框架，保持既有单框架行为。
+    this.framework = this.resolveFramework(config);
+    this.frameworkId = this.framework?.id ?? null;
     this.slicer = new PcmResamplerSlicer();
     this.pendingPackets = [];
+    // 就绪门：不能无条件清空缓冲——那正好会把「音频先到、会话后建」这段
+    // 缓冲抹掉，start() 末尾的 flushPreStartBuffer() 就永远拿不到东西。
+    // 只丢弃「陈旧」缓冲（对应会话真的没建的时段），新鲜缓冲留给补发。
+    if (this.preStartSamples.length && Date.now() - this.preStartBufferedAt >= PRE_START_BUFFER_MS) {
+      this.preStartSamples = [];
+      this.preStartDroppedSamples = 0;
+    }
     this.asrAudioStartMs = 0;
     this.asrAudioStarted = false;
     this.asrStatus = { state: "idle", connectionId: null, reconnectAttempt: 0, lastPartialMs: 0, gapDetected: false, lastError: null };
@@ -138,6 +249,10 @@ export class SessionOrchestrator {
       startedAtIso: new Date().toISOString(),
       audioSource: config.audioSource,
       deviceId: config.deviceId ?? null,
+      // 框架与主播在创建时就落库：历史导出时内存态已不存在，只能靠会话记录追溯。
+      frameworkId: this.framework?.id ?? null,
+      speakerId: config.speakerId ?? null,
+      speakerName: config.speakerName ?? null,
     });
 
     const settingsRaw = this.store.getSetting("app_settings");
@@ -159,6 +274,18 @@ export class SessionOrchestrator {
 
     const intervalMs = (config.windowIntervalSec ?? settings.windowIntervalSec ?? 60) * 1000;
     const windowMs = (config.windowSizeSec ?? settings.windowSizeSec ?? 300) * 1000;
+
+    // 排期窗口结束：只在**会话在窗口内启动**时才绑定结束时刻。
+    // 这样用户临时开的（窗口外）监听不会被预约结束掐断——只有明确按排期跑的会话才受约束。
+    // 注意这与「到点自动开始」是两件事：自动开始受 user activation 硬约束未接通，
+    // 但「到点自动结束」不依赖任何用户手势，可以独立成立。
+    const endAt = scheduledEndAt(settings.schedule ?? null, new Date());
+    this.scheduledEndAtMs = endAt ? endAt.getTime() : null;
+    if (this.scheduledEndAtMs !== null) {
+      this.emit("schedule.status", {
+        scheduledEndAtIso: endAt!.toISOString(),
+      } satisfies ScheduleStatus);
+    }
     try {
       this.scheduler = new WindowScheduler(intervalMs, windowMs, {
         getNow: () => this.nowMs(),
@@ -187,10 +314,14 @@ export class SessionOrchestrator {
         this.scheduler?.tick(this.nowMs());
         // 话术步骤面板需要秒级刷新：阶段停留时长与超时状态
         this.emitScriptStatus();
+        this.checkScheduledEnd();
       }
     }, 1000);
 
     this.emitScriptStatus();
+
+    // 就绪门：若调用方先开了采集再建会话，这里把就绪窗口内缓冲的音频按序补发。
+    this.flushPreStartBuffer();
 
     return { sessionId, error: null };
   }
@@ -225,6 +356,7 @@ export class SessionOrchestrator {
     this.store.updateSessionStatus(this.sessionId!, "active");
     this.audioStatus = { ...this.audioStatus, state: "capturing" };
     this.emit("capture.status", this.audioStatus);
+    this.flushPreStartBuffer();
     const asrCfg = readRuntimeAsrConfig(this.store);
     if (!asrCfg) return;
     void this.asr.connect(asrCfg).catch(() => {
@@ -232,7 +364,7 @@ export class SessionOrchestrator {
     });
   }
 
-  async stop() {
+  async stop(endReason: SessionEndReason = "user") {
     if (!this.sessionIsActive || this.status === "stopping") return;
     this.status = "stopping";
     if (this.tickTimer) clearInterval(this.tickTimer);
@@ -245,23 +377,125 @@ export class SessionOrchestrator {
       /* best effort */
     }
     this.status = "stopped";
-    this.store.updateSessionStatus(this.sessionId!, "stopped", new Date().toISOString());
+    this.store.updateSessionStatus(this.sessionId!, "stopped", new Date().toISOString(), endReason);
     this.audioStatus = { ...this.audioStatus, state: "idle" };
     this.emit("capture.status", this.audioStatus);
     this.asrStatus = { ...this.asrStatus, state: "closed" };
     this.emit("asr.status", this.asrStatus);
+    this.lastEndReason = endReason;
+    // 自动结束必须让用户看见原因：否则他只看到一场「正常结束」的空会话，
+    // 无法区分是排期到点、软件故障还是自己忘关（历史事故的成因之一）。
+    if (endReason !== "user") {
+      this.emit("app.error", makeError(
+        "SESSION_AUTO_ENDED",
+        endReason === "schedule-window-end"
+          ? "已到排期结束时刻，本场监听已自动结束"
+          : `本场监听已自动结束（${endReason}）`,
+        false,
+      ));
+    }
   }
 
-  /** Feeds raw audio from renderer (already mono Float32 at some rate). */
+  /**
+   * Feeds raw audio from renderer (already mono Float32 at some rate).
+   *
+   * 时序就绪门：调用方可能「定时器先建会话、隔一会儿再开采集」，也可能反过来
+   * 「先开采集、再建会话」。后者在过去会直接丢音——正是第①级诊断踩过的
+   * 「电平完美 + 0 字幕」。这里对「会话已建立、但尚未 active」的短暂窗口做
+   * 有界缓冲（上限 3 秒，与音频队列 10 秒上限同思路），转 active 后按序补发。
+   *
+   * 注意语义边界：会话真的没建（status 为 idle/stopped 且无 sessionId）时仍然丢弃，
+   * 不能把「没开始监听」的音频无限缓冲起来。
+   */
   ingestAudio(float32: Float32Array, sourceRate: number): void {
-    if (this.status !== "active" || !this.sessionId) return;
+    if (!this.canAcceptAudio()) {
+      this.bufferPreStartAudio(float32, sourceRate);
+      return;
+    }
     const packets = this.slicer.push(float32, sourceRate, this.nowMs());
     for (const p of packets) {
       for (const iv of detectSpeechIntervals([p])) {
-        this.store.insertSpeechInterval({ id: crypto.randomUUID(), sessionId: this.sessionId, ...iv });
+        this.store.insertSpeechInterval({ id: crypto.randomUUID(), sessionId: this.sessionId!, ...iv });
       }
       this.pendingPackets.push(p);
     }
+    this.drainPendingPackets();
+  }
+
+  /** 音频可被正式接收：会话已建立且处于 active。 */
+  private canAcceptAudio(): boolean {
+    return this.status === "active" && !!this.sessionId;
+  }
+
+  /**
+   * 音频尚未能被正式接收时，缓冲「临近启动窗口」内的原始音频（有界）。
+   *
+   * 关键语义边界：
+   * - 音频先到、会话尚未建立（sessionId 为空）时要缓冲，否则无人值守下会真实丢音；
+   * - 但缓冲只覆盖最近 PRE_START_BUFFER_MS 的墙钟时间。超过这个窗口的音频视为
+   *   「会话真的没建」，直接丢弃且绝不补发——否则会在几分钟后启动会话时把一段
+   *   陈旧音频灌进新会话，比丢帧更糟。
+   */
+  private bufferPreStartAudio(float32: Float32Array, sourceRate: number): void {
+    if (this.status === "paused" || this.status === "stopping") return;
+    if (float32.length === 0) return;
+    const nowWall = Date.now();
+    // 陈旧缓冲：距首次缓冲已超过窗口，说明这不是一次启动过渡，整段作废。
+    if (this.preStartSamples.length && nowWall - this.preStartBufferedAt >= PRE_START_BUFFER_MS) {
+      this.preStartSamples = [];
+      this.preStartDroppedSamples = 0;
+    }
+    if (this.preStartSamples.length === 0) this.preStartBufferedAt = nowWall;
+    const maxBufferedSamples = Math.ceil(sourceRate * PRE_START_BUFFER_MS / 1000);
+    for (let i = 0; i < float32.length; i++) this.preStartSamples.push(float32[i]);
+    if (this.preStartSamples.length > maxBufferedSamples) {
+      const dropped = this.preStartSamples.length - maxBufferedSamples;
+      this.preStartSamples.splice(0, dropped);
+      this.preStartDroppedSamples += dropped;
+      this.emit("app.error", makeError(
+        "PRE_START_BUFFER_OVERFLOW",
+        "会话启动前音频缓冲已满，丢弃最早样本",
+        true,
+      ));
+    }
+    this.preStartSampleRate = sourceRate;
+  }
+
+  /** 会话转 active 后把就绪窗口内缓冲的音频按序补发；过期缓冲直接丢弃。 */
+  private flushPreStartBuffer(): void {
+    if (!this.preStartSamples.length) return;
+    if (!this.canAcceptAudio()) return;
+    const age = Date.now() - this.preStartBufferedAt;
+    if (age >= PRE_START_BUFFER_MS) {
+      // 缓冲已过期，对应「会话真的没建」的时段，不补发也不残留。
+      this.preStartSamples = [];
+      this.preStartDroppedSamples = 0;
+      return;
+    }
+    const rate = this.preStartSampleRate || 16000;
+    const samples = new Float32Array(this.preStartSamples);
+    this.preStartSamples = [];
+    const dropped = this.preStartDroppedSamples;
+    this.preStartDroppedSamples = 0;
+    const packets = this.slicer.push(samples, rate, this.nowMs());
+    for (const p of packets) {
+      for (const iv of detectSpeechIntervals([p])) {
+        this.store.insertSpeechInterval({ id: crypto.randomUUID(), sessionId: this.sessionId!, ...iv });
+      }
+      this.pendingPackets.push(p);
+    }
+    this.drainPendingPackets();
+    if (dropped > 0) {
+      this.emit("app.error", makeError(
+        "PRE_START_BUFFER_PARTIAL",
+        `就绪窗口缓冲超出上限，已丢弃最早 ${dropped} 个采样`,
+        true,
+      ));
+    }
+  }
+
+  /** 有界补发：把已到发送时点的包按序发出。 */
+  private drainPendingPackets(): void {
     // bounded queue ~10s
     const maxPackets = Math.floor(10000 / PACKET_MS);
     if (this.pendingPackets.length > maxPackets) {
@@ -420,9 +654,9 @@ export class SessionOrchestrator {
       const intervals = this.store.querySpeechIntervals(sessionId, startMs, endMs);
       const metrics = computeMetrics(segments, intervals, startMs, endMs);
 
-      const frameworkList = this.store.listFrameworks();
-      const framework = frameworkList[0] ?? null;
-      this.framework = framework;
+      // 复用会话绑定的框架：不再每个窗口重读 listFrameworks()[0]，
+      // 否则多框架会话会被静默切回第一个框架。
+      const framework = this.framework;
       const issues: Issue[] = [];
       const issueSteps = new Map<string, string | null>();
       for (const seg of segments) {
@@ -529,11 +763,19 @@ export class SessionOrchestrator {
       if (persisted.length > 0) {
         emit("analysis.issues", persisted);
       }
+      if (this.activeAnalysisRunId === runId) {
+        this.analysisRunning = false;
+        this.activeAnalysisRunId = null;
+      }
       emit("analysis.status", this.analysisStatusSnapshot(runStatus));
     } catch (err) {
       const appError = err as Partial<AppError> | null;
       const msg = appError?.code && appError.message ? `${appError.code}: ${appError.message}` : err instanceof Error ? err.message : "unknown";
       this.store.finishAnalysisRun(runId, "failed", new Date().toISOString(), msg);
+      if (this.activeAnalysisRunId === runId) {
+        this.analysisRunning = false;
+        this.activeAnalysisRunId = null;
+      }
       emit("analysis.status", this.analysisStatusSnapshot("failed"));
     } finally {
       if (this.activeAnalysisRunId === runId) {
@@ -550,6 +792,9 @@ export class SessionOrchestrator {
       finalCount: this.finalCount,
       audio: this.audioStatus,
       asr: this.asrStatus,
+      /** 会话绑定的排期结束时刻（epoch ms），null 表示不按排期结束。 */
+      scheduledEndAtMs: this.scheduledEndAtMs,
+      lastEndReason: this.lastEndReason,
     };
   }
 }

@@ -1,0 +1,1029 @@
+{
+  "verificationKind": "operator-confirmed-real-asr-window-live-llm",
+  "executedAtIso": "2026-10-14T16:09:27.051Z",
+  "semanticAnalysisRan": true,
+  "semanticAnalysisNote": "真实LLM已调用",
+  "sourceLabel": "真实直播流经系统回环采集（10分钟窗口）",
+  "sourceSessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+  "sourceConfirmation": "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
+  "window": {
+    "startMs": 300000,
+    "endMs": 600000
+  },
+  "model": "group/auto-step-5-preview",
+  "lockedTarget": {
+    "base_url": "http://127.0.0.1:3425/v1",
+    "model": "group/auto-step-5-preview"
+  },
+  "requestCount": 1,
+  "transcriptSegmentCount": 30,
+  "allDisplayedEvidenceValid": true,
+  "evidenceCheck": {
+    "checkedIssueCount": 17,
+    "invalidIssueCount": 0,
+    "note": "已校验 17 条问题，无效 0 条"
+  },
+  "analysisRuns": [
+    {
+      "status": "success",
+      "error_message": null
+    }
+  ],
+  "displayedIssues": [
+    {
+      "id": "b16c0e34-1a1a-43c4-938f-9f60b092814f",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 399540,
+      "endMs": 410780,
+      "segmentIds": [
+        "68fa0511-651d-46cc-b2b7-c958fa968bf4"
+      ],
+      "quote": "官方旗舰店平时都要300多",
+      "basis": "命中规则 unverifiedClaim: (?:平时|专柜|官网|官方|旗舰店)[^。，,！!？?]{0,8}(?:都)?(?:要|卖|是)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?\\s*(?:多)?",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "49d68b55-afea-4d1e-8a48-57c9e41101df",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 410880,
+      "endMs": 422680,
+      "segmentIds": [
+        "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+      ],
+      "quote": "坚持用7天",
+      "basis": "命中规则 unverifiedClaim: (?:坚持|连续)(?:用|使用|喝|吃|涂抹)?\\s*\\d+\\s*(?:天|周|月)",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "dafb36ea-bbc6-49a4-b5ec-f1eac680b47d",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 410880,
+      "endMs": 422680,
+      "segmentIds": [
+        "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+      ],
+      "quote": "浓度5%",
+      "basis": "命中规则 unverifiedClaim: 浓度\\s*\\d+(?:\\.\\d+)?\\s*[%％]",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "33e53ad7-42f9-4609-965d-e809648604d3",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "absolutization",
+      "severity": "warning",
+      "startMs": 432260,
+      "endMs": 442280,
+      "segmentIds": [
+        "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+      ],
+      "quote": "所有肤质",
+      "basis": "命中规则 absolutization: 所有(?:肤质|肌肤|人群|宝宝|人)",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": false,
+      "status": "open"
+    },
+    {
+      "id": "1eccc5cd-774c-486b-9fce-2b9d84bb6c00",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "absolutization",
+      "severity": "warning",
+      "startMs": 432260,
+      "endMs": 442280,
+      "segmentIds": [
+        "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+      ],
+      "quote": "没有任何刺激",
+      "basis": "命中规则 absolutization: (?:没有|无)任何(?:刺激|副作用|添加|不适)",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": false,
+      "status": "open"
+    },
+    {
+      "id": "770135b6-1e61-46ee-84b8-4ab0954fa65e",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "absolutization",
+      "severity": "warning",
+      "startMs": 432260,
+      "endMs": 442280,
+      "segmentIds": [
+        "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+      ],
+      "quote": "放心食用",
+      "basis": "命中规则 absolutization: 放心(?:食用|口服)",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": false,
+      "status": "open"
+    },
+    {
+      "id": "9d6b62b4-9c9b-4dcf-9988-555bf71512f0",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 442360,
+      "endMs": 453900,
+      "segmentIds": [
+        "8a5796b7-add6-43a6-af75-7501be986e5f"
+      ],
+      "quote": "第二天就",
+      "basis": "命中规则 unverifiedClaim: 第[一二三四五六七八九十\\d]+天[^。，,！!？?]{0,6}(?:就|便)",
+      "recommendation": "主播应立即调整表达，替换为合规说法",
+      "suggestedScript": null,
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "807e16c1-356e-42b4-a694-fd759f45a4df",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 309120,
+      "endMs": 318740,
+      "segmentIds": [
+        "b09446e8-c611-4fd2-bbcb-ce72e02e20e8"
+      ],
+      "quote": "这款面膜是谢字号备案的医美级修护，做完项目之后连敷3天，退红速度肉眼可见。",
+      "basis": "使用‘医美级’可能涉及医疗术语宣称，‘退红速度肉眼可见’为功效描述；已核实商品事实为空，无法验证。",
+      "recommendation": "建议核实产品备案及功效依据，避免医疗相关宣称，可改为‘温和修护’等描述。",
+      "suggestedScript": "这款面膜是温和修护配方，日常护肤或项目后都可以使用。",
+      "confidence": 0.9,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "3ec33d69-c762-4219-b2f5-9bb59422af1d",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 410880,
+      "endMs": 422680,
+      "segmentIds": [
+        "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+      ],
+      "quote": "坚持用7天，你就能看到肤色明显提亮。这个是实测数据。",
+      "basis": "宣称7天可见肤色提亮并引用实测数据，但已核实商品事实为空，无法验证数据来源。",
+      "recommendation": "建议提供可公开的实测报告编号或检测机构证明，否则避免具体时限和效果承诺。",
+      "suggestedScript": "长期使用有助于改善暗沉，具体效果因人而异。",
+      "confidence": 0.9,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "662908ed-8a9e-4cd0-be81-b98912f6f6c8",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "absolutization",
+      "severity": "warning",
+      "startMs": 432260,
+      "endMs": 442280,
+      "segmentIds": [
+        "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+      ],
+      "quote": "所有肤质都可以放心食用，没有任何刺激。",
+      "basis": "使用‘所有肤质’‘没有任何刺激’等绝对化表述，且出现‘食用’口误；未提供敏感肌测试等核实依据。",
+      "recommendation": "建议改为‘多种肤质适用’并完成敏感肌测试公示，同时修正‘食用’为‘使用’。",
+      "suggestedScript": "很多姐妹问我敏感肌能不能用，我们做过敏感肌测试，大多数肤质都可以放心使用。",
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "dc7cfa0b-f3e7-411c-b51d-c9bb895b55ae",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 442360,
+      "endMs": 453900,
+      "segmentIds": [
+        "8a5796b7-add6-43a6-af75-7501be986e5f"
+      ],
+      "quote": "因修复屏障的效果非常好。换季烂脸的时候厚涂一层，第二天就稳了。",
+      "basis": "宣称修复屏障及次日见效，属于功效与时效性描述，已核实商品事实为空，无法验证。",
+      "recommendation": "建议补充功效评价数据，避免确定性时效承诺，可改为‘帮助舒缓不适’。",
+      "suggestedScript": "换季皮肤不稳定时厚涂一层，帮助舒缓修护。",
+      "confidence": 0.9,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "d74c3642-5d69-4faa-861a-50caeb0e3cca",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 399540,
+      "endMs": 410780,
+      "segmentIds": [
+        "68fa0511-651d-46cc-b2b7-c958fa968bf4"
+      ],
+      "quote": "官方旗舰店平时都要300多，今天在我直播间直接给你打下来。",
+      "basis": "进行价格对比并暗示折扣力度，但未提供官方价格依据及当前促销授权证明。",
+      "recommendation": "建议准备品牌方价格授权书或活动截图，避免绝对化低价表述。",
+      "suggestedScript": "今天直播间有品牌专属活动价，比日常购买更划算。",
+      "confidence": 0.85,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "60ab54e0-abec-45c9-ad30-c1c1355290d8",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 336560,
+      "endMs": 345620,
+      "segmentIds": [
+        "f771f7bb-28b5-4eeb-a633-4975fd173de8"
+      ],
+      "quote": "今天这场是品牌专场，所有货都是官方仓直发，支持专柜验货，假一赔十。",
+      "basis": "承诺‘假一赔十’及官方仓直发、专柜验货，但已核实商品事实为空，无法核验授权及赔付能力。",
+      "recommendation": "建议确认品牌授权链路及售后赔付流程，并在直播间展示相关凭证。",
+      "suggestedScript": "今天全部是官方渠道发货，支持官方渠道验货。",
+      "confidence": 0.85,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "1c258ae0-21f5-464f-a1b5-a0c02efd0922",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "warning",
+      "startMs": 465220,
+      "endMs": 474740,
+      "segmentIds": [
+        "69d5fa86-a476-4d5f-8196-5198b0d862db"
+      ],
+      "quote": "咱们这款是原装进口的海外直邮，每一瓶都有溯源码，扫一下就能看到完整的链路。",
+      "basis": "宣称原装进口、海外直邮及全程溯源，但未提供报关单或溯源系统截图等核实材料。",
+      "recommendation": "建议现场展示溯源码扫描结果或上传资质至直播间公告，增强可信度。",
+      "suggestedScript": null,
+      "confidence": 0.85,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "e6900dc6-04f0-4e15-9719-3064d3efca49",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "unverifiedClaim",
+      "severity": "info",
+      "startMs": 326980,
+      "endMs": 336500,
+      "segmentIds": [
+        "b8e55fd7-715f-45a8-880d-b63cf7cfcb80"
+      ],
+      "quote": "拍下默认发顺丰空运江浙沪次日达偏远地区，3天内也能到。物流这块不用担心。",
+      "basis": "对物流时效作出确定性承诺，但实际配送受多方因素影响，且未提供承运商保时效协议。",
+      "recommendation": "建议补充‘以实际物流为准’等提示，或说明为一般情况下的预计时效。",
+      "suggestedScript": "默认发顺丰，江浙沪一般次日可达，偏远地区预计3天内，具体以物流为准。",
+      "confidence": 0.8,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "1adbfde3-7b88-4661-bfa1-66e7f203bdef",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "repetition",
+      "severity": "warning",
+      "startMs": 300120,
+      "endMs": 309020,
+      "segmentIds": [
+        "8ecd3431-ac7e-4a0f-ab98-fee95b550008"
+      ],
+      "quote": "接下来这款是第二代升级版，相比第一代多了控油哑光的效果，油皮姐妹放心入。",
+      "basis": "该话术在窗口内与segment 8406e203-c9d0-448e-a6a4-f098eb75a8c7等多次完全重复，存在机械循环。",
+      "recommendation": "如为循环讲解，建议在第二轮更换开场话术或切入角度，避免观众听到完全一致的重复。",
+      "suggestedScript": null,
+      "confidence": 0.9,
+      "needsReview": false,
+      "status": "open"
+    },
+    {
+      "id": "3f52cf6b-5bcc-41bf-8248-4b60717c272c",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "analysisRunId": "4115d2f0-de4f-46cb-95e1-6c4bb76cef8d",
+      "type": "other",
+      "severity": "info",
+      "startMs": 422800,
+      "endMs": 432180,
+      "segmentIds": [
+        "1c168d86-6ae1-4182-adc4-7526dcd6a415"
+      ],
+      "quote": "321上链接，宝宝们直接冲手慢舞",
+      "basis": "存在口误‘手慢舞’，易被误解为‘手慢无’。",
+      "recommendation": "修正口误，清晰说出‘手慢无’。",
+      "suggestedScript": null,
+      "confidence": 0.9,
+      "needsReview": false,
+      "status": "open"
+    }
+  ],
+  "sourceSegments": [
+    {
+      "id": "e80a3a7f-9958-4d77-a12f-6fa0a1aa60ac",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 28,
+      "startMs": 291120,
+      "endMs": 300040,
+      "text": "感谢榜一大哥送的嘉年华，来给大家表演一个才艺。谢谢大哥的支持，大哥大气。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:13:21.577Z"
+    },
+    {
+      "id": "8ecd3431-ac7e-4a0f-ab98-fee95b550008",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 29,
+      "startMs": 300120,
+      "endMs": 309020,
+      "text": "接下来这款是第二代升级版，相比第一代多了控油哑光的效果，油皮姐妹放心入。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:13:30.563Z"
+    },
+    {
+      "id": "b09446e8-c611-4fd2-bbcb-ce72e02e20e8",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 30,
+      "startMs": 309120,
+      "endMs": 318740,
+      "text": "这款面膜是谢字号备案的医美级修护，做完项目之后连敷3天，退红速度肉眼可见。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:13:40.333Z"
+    },
+    {
+      "id": "2b5914e4-4ce8-448c-8cd8-5322381f764f",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 31,
+      "startMs": 318880,
+      "endMs": 326960,
+      "text": "咱们主播自己都在用，已经空瓶4罐了，不好用。我敢在直播间说这话吗？",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:13:48.525Z"
+    },
+    {
+      "id": "b8e55fd7-715f-45a8-880d-b63cf7cfcb80",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 32,
+      "startMs": 326980,
+      "endMs": 336500,
+      "text": "拍下默认发顺丰空运江浙沪次日达偏远地区，3天内也能到。物流这块不用担心。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:13:58.378Z"
+    },
+    {
+      "id": "f771f7bb-28b5-4eeb-a633-4975fd173de8",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 33,
+      "startMs": 336560,
+      "endMs": 345620,
+      "text": "今天这场是品牌专场，所有货都是官方仓直发，支持专柜验货，假一赔十。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:07.152Z"
+    },
+    {
+      "id": "e7500c84-4cb8-4ffb-a64e-14d29a3ab722",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 34,
+      "startMs": 345740,
+      "endMs": 354060,
+      "text": "宝宝们有什么问题打在公屏上，我每一条都会看。优先回答带截图的问题。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:15.538Z"
+    },
+    {
+      "id": "a1af6c94-7113-4c8e-868b-bf08e8aef9f4",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 35,
+      "startMs": 354180,
+      "endMs": 363000,
+      "text": "这个色号是热门色，黄皮白皮都能驾驭，素颜图也很提气色，完全不挑人。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:24.559Z"
+    },
+    {
+      "id": "32b82583-50f3-4b8c-be16-0afade92f0ee",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 36,
+      "startMs": 363020,
+      "endMs": 371880,
+      "text": "现在库存只剩最后2000单，运营把库存给我锁死，拍完这一轮立刻恢复原价。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:33.537Z"
+    },
+    {
+      "id": "5169133f-d023-45b7-9d83-6eab37288081",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 37,
+      "startMs": 371940,
+      "endMs": 381100,
+      "text": "老粉都知道，我直播间从来不搞虚的，说送就一定会送，说补库存就一定会补。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:42.742Z"
+    },
+    {
+      "id": "c861b94a-4cb9-4d02-a31c-ff857b2c8707",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 38,
+      "startMs": 381200,
+      "endMs": 389640,
+      "text": "最后再强调一遍活动规则，今晚12点前下单，明天上午统一打包发出。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:14:51.093Z"
+    },
+    {
+      "id": "7ebec0ce-ae4e-415e-af48-3560c0a67cef",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 39,
+      "startMs": 389700,
+      "endMs": 399420,
+      "text": "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:01.185Z"
+    },
+    {
+      "id": "68fa0511-651d-46cc-b2b7-c958fa968bf4",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 40,
+      "startMs": 399540,
+      "endMs": 410780,
+      "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:12.341Z"
+    },
+    {
+      "id": "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 41,
+      "startMs": 410880,
+      "endMs": 422680,
+      "text": "这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明显提亮。这个是实测数据。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:24.124Z"
+    },
+    {
+      "id": "1c168d86-6ae1-4182-adc4-7526dcd6a415",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 42,
+      "startMs": 422800,
+      "endMs": 432180,
+      "text": "来运营，帮我把这个优惠券再上1万张，321上链接，宝宝们直接冲手慢舞。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:33.766Z"
+    },
+    {
+      "id": "32f5b1a2-c785-4277-b60d-bf89fc1d677b",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 43,
+      "startMs": 432260,
+      "endMs": 442280,
+      "text": "很多姐妹问我敏感肌能不能用，我在这里承诺，所有肤质都可以放心食用，没有任何刺激。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:43.923Z"
+    },
+    {
+      "id": "8a5796b7-add6-43a6-af75-7501be986e5f",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 44,
+      "startMs": 442360,
+      "endMs": 453900,
+      "text": "这款面霜添加了二裂酵母和依克多，因修复屏障的效果非常好。换季烂脸的时候厚涂一层，第二天就稳了。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:15:55.562Z"
+    },
+    {
+      "id": "15ed57b8-cbbd-4f35-83aa-19f6e8dff890",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 45,
+      "startMs": 454000,
+      "endMs": 465080,
+      "text": "我们现在做的是7天无理由退换货，而且赠送运费险。你收到货不满意，直接退，没有任何风险。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:06.548Z"
+    },
+    {
+      "id": "69d5fa86-a476-4d5f-8196-5198b0d862db",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 46,
+      "startMs": 465220,
+      "endMs": 474740,
+      "text": "咱们这款是原装进口的海外直邮，每一瓶都有溯源码，扫一下就能看到完整的链路。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:16.349Z"
+    },
+    {
+      "id": "4d68e636-8179-4dbe-a137-c18351dc875c",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 47,
+      "startMs": 474880,
+      "endMs": 483700,
+      "text": "最后一个库存，拍完这一单我就下播了。想要的家人们，抓紧时间，倒数十个数。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:25.299Z"
+    },
+    {
+      "id": "bd5e6821-d7a8-4413-b7df-b89c816ef0e7",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 48,
+      "startMs": 483800,
+      "endMs": 492700,
+      "text": "感谢榜一大哥送的嘉年华，来给大家表演一个才艺。谢谢大哥的支持，大哥大气。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:34.366Z"
+    },
+    {
+      "id": "8406e203-c9d0-448e-a6a4-f098eb75a8c7",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 49,
+      "startMs": 492780,
+      "endMs": 501680,
+      "text": "接下来这款是第二代升级版，相比第一代多了控油哑光的效果，油皮姐妹放心入。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:43.343Z"
+    },
+    {
+      "id": "2303f30f-47a8-4ded-be73-49e0bfbdbaef",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 50,
+      "startMs": 501780,
+      "endMs": 511400,
+      "text": "这款面膜是谢字号备案的医美级修护，做完项目之后连敷3天，退红速度肉眼可见。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:16:52.965Z"
+    },
+    {
+      "id": "4dfe95c9-ae2a-468f-8cca-97571860ce32",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 51,
+      "startMs": 511540,
+      "endMs": 529040,
+      "text": "咱们主播自己都在用，已经空瓶4罐了，不好用。我敢在直播间说这话吗？拍下默认发顺丰空运江浙沪，次日达偏远地区，3天内也能到。物流这块不用担心。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:10.560Z"
+    },
+    {
+      "id": "7abdf529-4a01-404b-be12-7b8dcae726a9",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 52,
+      "startMs": 529160,
+      "endMs": 538180,
+      "text": "今天这场是品牌专场，所有货都是官方仓直发，支持专柜验货，假一赔十。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:19.738Z"
+    },
+    {
+      "id": "efc7c9f0-436a-41ec-b3fd-82da73171aa5",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 53,
+      "startMs": 538300,
+      "endMs": 546620,
+      "text": "宝宝们有什么问题打在公屏上，我每一条都会看。优先回答带截图的问题。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:28.155Z"
+    },
+    {
+      "id": "01493c4e-5b3e-47c1-8532-a6bc3cb19510",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 54,
+      "startMs": 546720,
+      "endMs": 555540,
+      "text": "这个色号是热门色，黄皮白皮都能驾驭，素颜图也很提气色，完全不挑人。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:37.143Z"
+    },
+    {
+      "id": "f3f97a52-c2d9-44fc-a831-c3243205c11c",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 55,
+      "startMs": 555560,
+      "endMs": 564440,
+      "text": "现在库存只剩最后2000单，运营把库存给我锁死，拍完这一轮立刻恢复原价。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:45.903Z"
+    },
+    {
+      "id": "f972e603-7dac-4f90-95d1-66f654ecf41a",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 56,
+      "startMs": 564500,
+      "endMs": 573680,
+      "text": "老粉都知道，我直播间从来不搞虚的，说送就一定会送，说补库存就一定会补。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:17:55.278Z"
+    },
+    {
+      "id": "7294910e-92e0-4031-96fe-449a7f47164e",
+      "sessionId": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "connectionId": "74e12628-d6a8-4990-bdd9-5947b2bc666a",
+      "sourceSeq": 57,
+      "startMs": 573780,
+      "endMs": 582200,
+      "text": "最后再强调一遍活动规则，今晚12点前下单，明天上午统一打包发出。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:18:03.731Z"
+    }
+  ],
+  "reviewStatus": {
+    "reviewedRealCandidates": 0,
+    "requiredRealCandidates": 20,
+    "falsePositiveRate": "未实测",
+    "falseNegativeRate": "未实测"
+  },
+  "report": {
+    "session": {
+      "id": "ae6d96d7-662d-4d13-aa53-881e9254d6a5",
+      "startedAtIso": "2026-10-14T15:08:20.877Z",
+      "endedAtIso": "2026-10-14T16:09:27.041Z",
+      "audioSource": "systemLoopback",
+      "listenedMs": 3666164
+    },
+    "asr": {
+      "connectionCount": null,
+      "disconnectCount": null,
+      "gapCount": null
+    },
+    "issues": {
+      "total": 17,
+      "bySeverity": {
+        "info": 2,
+        "warning": 15,
+        "critical": 0
+      },
+      "byType": {
+        "repetition": 1,
+        "unverifiedClaim": 11,
+        "other": 1,
+        "absolutization": 4
+      },
+      "confirmed": 5,
+      "needsReview": 12
+    },
+    "issueTimeline": [
+      {
+        "issueId": "1adbfde3-7b88-4661-bfa1-66e7f203bdef",
+        "type": "repetition",
+        "severity": "warning",
+        "firstSeenMs": 300120,
+        "quote": "接下来这款是第二代升级版，相比第一代多了控油哑光的效果，油皮姐妹放心入。",
+        "segmentIds": [
+          "8ecd3431-ac7e-4a0f-ab98-fee95b550008"
+        ],
+        "basis": "该话术在窗口内与segment 8406e203-c9d0-448e-a6a4-f098eb75a8c7等多次完全重复，存在机械循环。",
+        "recommendation": "如为循环讲解，建议在第二轮更换开场话术或切入角度，避免观众听到完全一致的重复。"
+      },
+      {
+        "issueId": "807e16c1-356e-42b4-a694-fd759f45a4df",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 309120,
+        "quote": "这款面膜是谢字号备案的医美级修护，做完项目之后连敷3天，退红速度肉眼可见。",
+        "segmentIds": [
+          "b09446e8-c611-4fd2-bbcb-ce72e02e20e8"
+        ],
+        "basis": "使用‘医美级’可能涉及医疗术语宣称，‘退红速度肉眼可见’为功效描述；已核实商品事实为空，无法验证。",
+        "recommendation": "建议核实产品备案及功效依据，避免医疗相关宣称，可改为‘温和修护’等描述。"
+      },
+      {
+        "issueId": "e6900dc6-04f0-4e15-9719-3064d3efca49",
+        "type": "unverifiedClaim",
+        "severity": "info",
+        "firstSeenMs": 326980,
+        "quote": "拍下默认发顺丰空运江浙沪次日达偏远地区，3天内也能到。物流这块不用担心。",
+        "segmentIds": [
+          "b8e55fd7-715f-45a8-880d-b63cf7cfcb80"
+        ],
+        "basis": "对物流时效作出确定性承诺，但实际配送受多方因素影响，且未提供承运商保时效协议。",
+        "recommendation": "建议补充‘以实际物流为准’等提示，或说明为一般情况下的预计时效。"
+      },
+      {
+        "issueId": "60ab54e0-abec-45c9-ad30-c1c1355290d8",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 336560,
+        "quote": "今天这场是品牌专场，所有货都是官方仓直发，支持专柜验货，假一赔十。",
+        "segmentIds": [
+          "f771f7bb-28b5-4eeb-a633-4975fd173de8"
+        ],
+        "basis": "承诺‘假一赔十’及官方仓直发、专柜验货，但已核实商品事实为空，无法核验授权及赔付能力。",
+        "recommendation": "建议确认品牌授权链路及售后赔付流程，并在直播间展示相关凭证。"
+      },
+      {
+        "issueId": "b16c0e34-1a1a-43c4-938f-9f60b092814f",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 399540,
+        "quote": "官方旗舰店平时都要300多",
+        "segmentIds": [
+          "68fa0511-651d-46cc-b2b7-c958fa968bf4"
+        ],
+        "basis": "命中规则 unverifiedClaim: (?:平时|专柜|官网|官方|旗舰店)[^。，,！!？?]{0,8}(?:都)?(?:要|卖|是)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?\\s*(?:多)?",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "d74c3642-5d69-4faa-861a-50caeb0e3cca",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 399540,
+        "quote": "官方旗舰店平时都要300多，今天在我直播间直接给你打下来。",
+        "segmentIds": [
+          "68fa0511-651d-46cc-b2b7-c958fa968bf4"
+        ],
+        "basis": "进行价格对比并暗示折扣力度，但未提供官方价格依据及当前促销授权证明。",
+        "recommendation": "建议准备品牌方价格授权书或活动截图，避免绝对化低价表述。"
+      },
+      {
+        "issueId": "49d68b55-afea-4d1e-8a48-57c9e41101df",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 410880,
+        "quote": "坚持用7天",
+        "segmentIds": [
+          "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+        ],
+        "basis": "命中规则 unverifiedClaim: (?:坚持|连续)(?:用|使用|喝|吃|涂抹)?\\s*\\d+\\s*(?:天|周|月)",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "3ec33d69-c762-4219-b2f5-9bb59422af1d",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 410880,
+        "quote": "坚持用7天，你就能看到肤色明显提亮。这个是实测数据。",
+        "segmentIds": [
+          "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+        ],
+        "basis": "宣称7天可见肤色提亮并引用实测数据，但已核实商品事实为空，无法验证数据来源。",
+        "recommendation": "建议提供可公开的实测报告编号或检测机构证明，否则避免具体时限和效果承诺。"
+      },
+      {
+        "issueId": "dafb36ea-bbc6-49a4-b5ec-f1eac680b47d",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 410880,
+        "quote": "浓度5%",
+        "segmentIds": [
+          "6a16f5f8-80bc-4cdf-913a-2ec8a3b84785"
+        ],
+        "basis": "命中规则 unverifiedClaim: 浓度\\s*\\d+(?:\\.\\d+)?\\s*[%％]",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "3f52cf6b-5bcc-41bf-8248-4b60717c272c",
+        "type": "other",
+        "severity": "info",
+        "firstSeenMs": 422800,
+        "quote": "321上链接，宝宝们直接冲手慢舞",
+        "segmentIds": [
+          "1c168d86-6ae1-4182-adc4-7526dcd6a415"
+        ],
+        "basis": "存在口误‘手慢舞’，易被误解为‘手慢无’。",
+        "recommendation": "修正口误，清晰说出‘手慢无’。"
+      },
+      {
+        "issueId": "33e53ad7-42f9-4609-965d-e809648604d3",
+        "type": "absolutization",
+        "severity": "warning",
+        "firstSeenMs": 432260,
+        "quote": "所有肤质",
+        "segmentIds": [
+          "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+        ],
+        "basis": "命中规则 absolutization: 所有(?:肤质|肌肤|人群|宝宝|人)",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "662908ed-8a9e-4cd0-be81-b98912f6f6c8",
+        "type": "absolutization",
+        "severity": "warning",
+        "firstSeenMs": 432260,
+        "quote": "所有肤质都可以放心食用，没有任何刺激。",
+        "segmentIds": [
+          "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+        ],
+        "basis": "使用‘所有肤质’‘没有任何刺激’等绝对化表述，且出现‘食用’口误；未提供敏感肌测试等核实依据。",
+        "recommendation": "建议改为‘多种肤质适用’并完成敏感肌测试公示，同时修正‘食用’为‘使用’。"
+      },
+      {
+        "issueId": "770135b6-1e61-46ee-84b8-4ab0954fa65e",
+        "type": "absolutization",
+        "severity": "warning",
+        "firstSeenMs": 432260,
+        "quote": "放心食用",
+        "segmentIds": [
+          "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+        ],
+        "basis": "命中规则 absolutization: 放心(?:食用|口服)",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "1eccc5cd-774c-486b-9fce-2b9d84bb6c00",
+        "type": "absolutization",
+        "severity": "warning",
+        "firstSeenMs": 432260,
+        "quote": "没有任何刺激",
+        "segmentIds": [
+          "32f5b1a2-c785-4277-b60d-bf89fc1d677b"
+        ],
+        "basis": "命中规则 absolutization: (?:没有|无)任何(?:刺激|副作用|添加|不适)",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "dc7cfa0b-f3e7-411c-b51d-c9bb895b55ae",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 442360,
+        "quote": "因修复屏障的效果非常好。换季烂脸的时候厚涂一层，第二天就稳了。",
+        "segmentIds": [
+          "8a5796b7-add6-43a6-af75-7501be986e5f"
+        ],
+        "basis": "宣称修复屏障及次日见效，属于功效与时效性描述，已核实商品事实为空，无法验证。",
+        "recommendation": "建议补充功效评价数据，避免确定性时效承诺，可改为‘帮助舒缓不适’。"
+      },
+      {
+        "issueId": "9d6b62b4-9c9b-4dcf-9988-555bf71512f0",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 442360,
+        "quote": "第二天就",
+        "segmentIds": [
+          "8a5796b7-add6-43a6-af75-7501be986e5f"
+        ],
+        "basis": "命中规则 unverifiedClaim: 第[一二三四五六七八九十\\d]+天[^。，,！!？?]{0,6}(?:就|便)",
+        "recommendation": "主播应立即调整表达，替换为合规说法"
+      },
+      {
+        "issueId": "1c258ae0-21f5-464f-a1b5-a0c02efd0922",
+        "type": "unverifiedClaim",
+        "severity": "warning",
+        "firstSeenMs": 465220,
+        "quote": "咱们这款是原装进口的海外直邮，每一瓶都有溯源码，扫一下就能看到完整的链路。",
+        "segmentIds": [
+          "69d5fa86-a476-4d5f-8196-5198b0d862db"
+        ],
+        "basis": "宣称原装进口、海外直邮及全程溯源，但未提供报关单或溯源系统截图等核实材料。",
+        "recommendation": "建议现场展示溯源码扫描结果或上传资质至直播间公告，增强可信度。"
+      }
+    ],
+    "metrics": {
+      "speechMs": 169600,
+      "silenceMs": 412600,
+      "chineseChars": 986,
+      "englishWords": 0,
+      "charsPerSpeechMinute": 349,
+      "charsPerTotalMinute": 102,
+      "longestSilenceMs": 300400
+    },
+    "llm": {
+      "requestCount": null,
+      "failedCount": null,
+      "estimatedTokens": 1578
+    },
+    "analysisRuns": {
+      "total": 1,
+      "success": 1,
+      "failed": 0
+    },
+    "script": {
+      "frameworkName": "保温杯讲解一轮（模拟商品资料）",
+      "phases": [
+        {
+          "phase": "cta",
+          "startMs": 389640,
+          "endMs": 399420
+        },
+        {
+          "phase": "opening",
+          "startMs": 399420,
+          "endMs": 582200
+        },
+        {
+          "phase": "cta",
+          "startMs": 582200,
+          "endMs": 582200
+        }
+      ],
+      "steps": [
+        {
+          "name": "开场：介绍主播和商品，欢迎新观众；不许承诺未证实效果",
+          "priority": 2,
+          "maxWaitMs": 60000,
+          "maxStayMs": 182780,
+          "overdue": true
+        },
+        {
+          "name": "需求：说明通勤和日常饮水场景，询问观众常用杯子容量",
+          "priority": 1,
+          "maxWaitMs": 90000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "必讲卖点：500mL容量、304不锈钢内胆、米白和深蓝两色；引用商家资料",
+          "priority": 2,
+          "maxWaitMs": 120000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "使用与限制：清洗、留出杯口空间、旋紧杯盖；不要装干冰或强酸强碱",
+          "priority": 2,
+          "maxWaitMs": 180000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "互动：读一条真实评论并回答；邀请喜欢讲解的观众关注和点赞",
+          "priority": 1,
+          "maxWaitMs": 180000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "价格与售后：只报页面实时到手价，说明平台退换货规则；不编造原价折扣库存",
+          "priority": 2,
+          "maxWaitMs": 240000,
+          "maxStayMs": 9780,
+          "overdue": false
+        },
+        {
+          "name": "成交引导：提示查看购物车规格和颜色，核对实际价格后自主下单；开始新轮讲解",
+          "priority": 1,
+          "maxWaitMs": 300000,
+          "maxStayMs": 9780,
+          "overdue": false
+        },
+        {
+          "name": "可选补充：在真实观众提问时演示清洗杯盖",
+          "priority": 0,
+          "maxWaitMs": 0,
+          "maxStayMs": 0,
+          "overdue": false
+        }
+      ]
+    },
+    "generatedAtIso": "2026-10-14T16:09:27.051Z"
+  }
+}

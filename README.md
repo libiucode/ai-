@@ -151,7 +151,7 @@ better-sqlite3 单个二进制只能对应一个运行时：Electron 33.4.11 需
 已完成并有本轮证据：
 
 - typecheck（双 tsconfig）、build、renderer smoke 通过。
-- `npm test` 全量通过（16 个测试文件、157 项，2026-10-14 22:42，盯播负责人实测）。fixture 通过**不代表**真实 ASR/LLM 已验收。
+- `npm test` 全量通过：**16 个测试文件 / 157/157**（2026-10-14 22:42，盯播负责人亲自复跑）。fixture 通过**不代表**真实 ASR/LLM 已验收；其中 `real-window-harness` 的 3 项是工具自测，**不代表真实 LLM 已验收**。
 - `npm test` 内部清空 `DSH_SECRET_*` 后运行，**不发出任何真实 ASR/LLM 请求**；真实联调脚本（`tencent-live-probe.js`、`asr-bench/*`、`verifyRealWindow`）直接运行以继承凭证。两者不要混用——用 `npm test` 的结果证明真实链路无效。
 - Windows 系统声音主进程 handler 已注册：主屏幕 + loopback 授权路径就位，默认要求真实用户手势。
 - 鉴权/上传连通性探针通过：12 秒本地合成多频波，451ms WebSocket 握手、2 个临时帧、1 个空文本稳态帧、close 1006。**只证明握手与上传链路连通，不证明识别出文本、不证明字幕、不证明端到端延迟验收。**
@@ -199,11 +199,11 @@ better-sqlite3 单个二进制只能对应一个运行时：Electron 33.4.11 需
 ## 测试说明
 
 - `npm test`：electron-node 方式，全量单次 run 后退出；不要用 `npx vitest run`（会因 Node ABI 不匹配全红），也不要在测试前后切 ABI。
-- 本轮结果：16 个测试文件、157 项全通过（2026-10-14 22:42，盯播负责人实测）。fixture 通过**不代表**真实 ASR/LLM 已验收。
+- 本轮结果：**16 个测试文件 / 157/157 全通过**（2026-10-14 22:42，盯播负责人亲自复跑）。fixture 通过**不代表**真实 ASR/LLM 已验收。
+  - 其中 `tests/real-window-harness.test.ts` 的 3 项是**工具自测**：证明验证脚本（`verifyRealWindow.ts`）本身能跑通「真实窗口 → LLM → 证据门禁 → 报告」流程（隔离内存库、模拟 ASR 来源、模拟 fetch），**不代表真实 LLM 已验收**。
 - **`npm test` 内部会清空 `DSH_SECRET_*`（及公开的 `DSH_TENCENT_ASR_APP_ID` / `DSH_LLM_BASE_URL` / `DSH_LLM_MODEL`）再启动 vitest**，防止单测意外发出真实网络请求。因此**不要以为 `npm test` 能验证真实链路**——它一条真实 ASR/LLM 请求都不会发。
 - 真实联调（`scripts/tencent-live-probe.js`、`scripts/asr-bench/*`、`verifyRealWindow`）**不走 `npm test`**，直接运行以继承真实凭证。
-- 新增 `tests/real-window-harness.test.ts`：真实窗口 → LLM → 证据门禁 → 报告的**隔离内存库**验证，ASR 来源与 fetch 均为模拟。它证明链路编排与门禁逻辑，**不算真实 LLM 验收**。
-- `fixtures/` 覆盖：ASR 临时/稳态分离、断线重连、LLM 正常/超时/坏 JSON/伪造证据、话术框架样例。
+- 新增 `tests/real-window-harness.test.ts`：真实窗口 → LLM → 证据门禁 → 报告的**隔离内存库**验证，ASR 来源与 fetch 均为模拟。它证明链路编排与门禁逻辑，**不算真实 LLM 验收**。- `fixtures/` 覆盖：ASR 临时/稳态分离、断线重连、LLM 正常/超时/坏 JSON/伪造证据、话术框架样例。
 - 所有 fixture 测试标注「模拟数据」；fixture 通过**不代表**真实 ASR/LLM 已验收。
 - 话术步骤覆盖：实时面板经 `script.status` 事件秒级刷新，报告侧由 `replayScriptPhases` 重放稳态转写还原（同一台状态机），测试见 `tests/scriptCoverage.test.ts`。
 - 历史材料中的"10.815 秒人声 → 3 条稳态字幕"是**历史记录**，本轮未复现，不代表当前版本已通过真实识别验收。

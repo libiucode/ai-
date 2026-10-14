@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Issue, ReportSummary, SessionSummary, TranscriptSegment } from "../../shared/contracts";
+import type { Issue, ReportFormat, ReportSummary, SessionSummary, TranscriptSegment } from "../../shared/contracts";
 import { PHASE_LABEL } from "../../shared/contracts";
 import {
   Badge,
@@ -50,7 +50,7 @@ export function HistoryPage() {
     setLoading(false);
   }
 
-  async function doExport(format: "markdown" | "json") {
+  async function doExport(format: ReportFormat) {
     if (!selectedId) return;
     setExportMsg("导出中…");
     const p = await window.appApi.exportReport(selectedId, format);
@@ -109,7 +109,7 @@ export function HistoryPage() {
               <Button variant={view === "detail" ? "primary" : "default"} onClick={() => setView("detail")}>转写与问题</Button>
               <Button variant={view === "report" ? "primary" : "default"} onClick={() => setView("report")}>报告</Button>
               <div className="spacer">
-                <Button onClick={() => void doExport("markdown")}>导出 HTML 报告</Button>
+                <Button onClick={() => void doExport("html")}>导出 HTML 报告</Button>
                 <Button onClick={() => void doExport("json")}>导出 JSON 报告</Button>
               </div>
             </div>

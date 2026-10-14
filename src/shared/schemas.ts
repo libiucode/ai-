@@ -99,11 +99,28 @@ export const LlmConfigSchema = z.object({
   base_url: z.string().url(),
   model: z.string().min(1),
   api_key: z.string().min(1),
-  request_timeout_ms: z.number().int().positive().default(30000),
+  // 默认 150 秒：必须覆盖「一次调用约 65s + 一次修复约 65s = 130s」，
+  // 120 秒会在修复路径失败。硬上限 180 秒见 analysis/llmClient.ts。
+  // 决策记录（2026-10-14，盯播负责人）：方案第 7 节的 20 秒对真实推理型模型不可用。
+  request_timeout_ms: z.number().int().positive().default(150000),
   max_retries: z.number().int().nonnegative().default(1),
   budget_limit: z.number().nonnegative().default(10),
 });
 export type LlmConfig = z.infer<typeof LlmConfigSchema>;
+
+/** "HH:mm" 24 小时制，本地时间。 */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const ScheduleConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  startTime: z.string().regex(HHMM, "开始时间需为 HH:mm（24 小时制）"),
+  endTime: z.string().regex(HHMM, "结束时间需为 HH:mm（24 小时制）"),
+  /** 0=周日 … 6=周六；空数组表示每天。 */
+  weekdays: z.array(z.number().int().min(0).max(6)).default([]),
+  audioSource: z.enum(["microphone", "systemLoopback"]).default("systemLoopback"),
+  frameworkId: z.string().nullable().default(null),
+});
+export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
 export const SettingsSchema = z.object({
   llm: LlmConfigSchema.partial({ api_key: true }).optional(),
@@ -122,6 +139,7 @@ export const SettingsSchema = z.object({
   ]).default(300),
   paceThreshold: z.number().optional(),
   silenceThresholdMs: z.number().optional(),
+  schedule: ScheduleConfigSchema.optional(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -130,10 +148,28 @@ export const StartSessionConfigSchema = z.object({
   deviceId: z.string().nullable().optional(),
   windowIntervalSec: z.number().optional(),
   windowSizeSec: z.number().optional(),
+  /** 本场会话使用的话术框架 id。缺省或匹配不到时回退到第一个框架。 */
+  frameworkId: z.string().nullable().optional(),
+  /** 主播稳定标识；用于同一主播跨场对比，改名不影响聚合。 */
+  speakerId: z.string().nullable().optional(),
+  /** 主播当次显示名快照；历史报告保留当时的名字（有意的可追溯性）。 */
+  speakerName: z.string().nullable().optional(),
 });
 export type StartSessionConfig = z.infer<typeof StartSessionConfigSchema>;
 
-export const ReportFormatSchema = z.enum(["markdown", "json"]);
+/**
+ * 报告导出格式。
+ *
+ * 历史遗留："markdown" 这个名字是错的——该分支实际调用 buildHtmlReport()，
+ * 产出 .html 文件，从来不生成 Markdown。名字与实际行为不符比没有契约更糟，
+ * 故改名为 "html"。
+ *
+ * 兼容读取：改名前的调用方可能仍在传 "markdown"，这里统一归一化为 "html"，
+ * 避免它们静默走到回退分支（拿不到报告却看不出为什么）。写出时只会是 html/json。
+ */
+export const ReportFormatSchema = z
+  .enum(["html", "json", "markdown"])
+  .transform((v): "html" | "json" => (v === "markdown" ? "html" : v));
 
 export const IpcChannels = {
   sessionStart: "session.start",
@@ -155,6 +191,7 @@ export const IpcChannels = {
   analysisStatus: "analysis.status",
   analysisIssues: "analysis.issues",
   scriptStatus: "script.status",
+  scheduleStatus: "schedule.status",
   frameworkList: "framework.list",
   frameworkSave: "framework.save",
   settingsGet: "settings.get",

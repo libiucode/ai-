@@ -41,8 +41,8 @@ afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers();
 });
 function makeStore() { const s = new Store(":memory:"); stores.push(s); return s; }
-async function startOrch() {
-  const store = makeStore(); store.saveFramework(framework);
+async function startOrch(useFramework: Framework = framework) {
+  const store = makeStore(); store.saveFramework(useFramework);
   const orch = new SessionOrchestrator(store); orchestrators.push(orch);
   const events: Array<{ event: string; payload: unknown }> = [];
   orch.setWindow({ isDestroyed: () => false, webContents: { send: (event: string, payload: unknown) => events.push({ event, payload }) } } as never);
@@ -97,16 +97,24 @@ describe("B 真实调度/存储问题去重", () => {
     store.insertSegment({ ...seg("risk", 285000, 325000, "全网最低价，保证所有人满意"), sessionId });
     for (const end of [300000, 360000, 420000]) await run(Math.max(0, end - 300000), end);
     const rows = store.listIssues(sessionId);
-    // Default absolutes have step=null; custom absolutes bind facts: three distinct keys.
-    expect(rows).toHaveLength(3);
+    // 测试文本「全网最低价，保证所有人满意」含 3 个不同风险点：保证 / 所有人 / 全网最低。
+    // 每个风险点同时被默认规则(step=null)和框架规则(step=facts)命中 → 3×2=6 条。
+    // 旧键（类型+步骤+片段）会把它们塌成 3 条，只留第一个引文，造成漏报。
+    expect(rows).toHaveLength(6);
+    const quotes = new Set(rows.map((r) => r.quote as string));
+    expect(quotes).toEqual(new Set(["保证", "所有人", "全网最低"]));
     for (const row of rows) { expect(row.occurrence_count).toBeGreaterThanOrEqual(3); expect(row.first_seen_ms).toBe(285000); expect(row.last_seen_ms).toBe(325000); }
     const shown = events.filter((e) => e.event === "analysis.issues").flatMap((e) => e.payload as Issue[]);
-    expect(shown).toHaveLength(3);
+    expect(shown).toHaveLength(6);
   });
-  it("B2 引文改写仍去重，不同步骤不互相吞掉", () => {
-    const a = { type: "frameworkStep" as const, segmentIds: ["b", "a"] };
+  it("B2 引文改写仍去重，不同步骤/不同引文不互相吞掉", () => {
+    const a = { type: "frameworkStep" as const, segmentIds: ["b", "a"], quote: "保证所有人满意" };
     expect(issueDedupeKey(a, "facts")).toBe(issueDedupeKey({ ...a, segmentIds: ["a", "b", "a"] }, "facts"));
     expect(issueDedupeKey(a, "facts")).not.toBe(issueDedupeKey(a, "offer"));
+    // 关键回归：同片段、同类型、同步骤，但引文不同 → 必须是两个键
+    // （历史缺陷：第①级真实片段里「所有肤质」「没有任何刺激」「放心食用」塌成一条，造成漏报）
+    const other = { ...a, quote: "没有任何刺激" };
+    expect(issueDedupeKey(a, "facts")).not.toBe(issueDedupeKey(other, "facts"));
   });
 });
 
@@ -203,14 +211,39 @@ describe("E/F 结构和幻觉防护", () => {
   });
 });
 
-describe("G 20秒超时与有界合并", () => {
-  it("G1 原请求+重试+修复共用20秒预算；fetch忽略abort也不挂住", async () => {
+describe("G 整轮超时与有界合并（上限已按决策提至硬180s/默认150s）", () => {
+  it("G1 原请求+重试+修复共用同一个截止时间；fetch忽略abort也不挂住", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {})); vi.stubGlobal("fetch", fetchMock);
+    // 显式传 30s：即使 max_retries=3，整轮也必须在 30s 截止，不会每轮重新计时。
     const promise = client(10, 3, 30000).analyze(input());
     const checked = expect(promise).rejects.toMatchObject({ code: "LLM_TIMEOUT" });
-    await vi.advanceTimersByTimeAsync(20000); await checked;
+    await vi.advanceTimersByTimeAsync(30000); await checked;
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("G1b 上限被硬夹到 180 秒：配置超过 180s 也不生效", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {})); vi.stubGlobal("fetch", fetchMock);
+    const promise = client(10, 0, 600000).analyze(input()); // 要求 600s
+    const checked = expect(promise).rejects.toMatchObject({ code: "LLM_TIMEOUT" });
+    await vi.advanceTimersByTimeAsync(180000); await checked; // 180s 时已超时
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("G1c 默认上限 150 秒：不传超时也能覆盖真实模型的调用+修复路径", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {})); vi.stubGlobal("fetch", fetchMock);
+    const c = new LlmClient();
+    c.configure({ base_url: "http://fixture.invalid/v1/", model: "fixture", api_key: "k" });
+    const promise = c.analyze(input());
+    const checked = expect(promise).rejects.toMatchObject({ code: "LLM_TIMEOUT" });
+    // 130s（一次调用65s+一次修复65s）时还没超时
+    await vi.advanceTimersByTimeAsync(130000);
+    expect(fetchMock).toHaveBeenCalled();
+    // 150s 整轮截止
+    await vi.advanceTimersByTimeAsync(20000);
+    await checked;
   });
   it("G2 单运行+单待处理；失败后启动最新等待窗口，跳过次数准确", async () => {
     const windows: number[] = []; let rejectFirst!: (e: unknown) => void; let concurrency = 0; let maxConcurrency = 0;
@@ -225,10 +258,10 @@ describe("G 20秒超时与有界合并", () => {
   it("G3 超时释放调度锁，下一轮真正LLM请求正常返回", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn().mockImplementationOnce(() => new Promise(() => {})).mockResolvedValue(response('{"issues":[]}')); vi.stubGlobal("fetch", fetchMock);
-    const c = client(); const finished: number[] = []; const errors: unknown[] = [];
+    const c = client(10, 0, 30000); const finished: number[] = []; const errors: unknown[] = [];
     const scheduler = new WindowScheduler(60000, 300000, { getNow: () => 0, getWindow: async (_, end) => { await c.analyze(input()); finished.push(end); }, onError: (e) => errors.push(e) });
     scheduler.start(0); scheduler.tick(60000); scheduler.tick(120000);
-    await vi.advanceTimersByTimeAsync(20000); await drain();
+    await vi.advanceTimersByTimeAsync(30000); await drain();
     expect(errors).toHaveLength(1); expect(finished).toEqual([120000]); expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
@@ -236,7 +269,8 @@ describe("G 20秒超时与有界合并", () => {
 describe("G 超时状态持久化", () => {
   it("G4 orchestrator记录timeout及错误码，不统一写failed", async () => {
     vi.stubEnv("DSH_SECRET_LLM_API_KEY", "fixture-key"); vi.stubEnv("DSH_LLM_BASE_URL", "http://127.0.0.1:3425/v1"); vi.stubEnv("DSH_LLM_MODEL", "group/auto-step-5-preview");
-    vi.spyOn(LlmClient.prototype, "analyze").mockRejectedValue({ code: "LLM_TIMEOUT", message: "fixture timeout", retryable: true });    const { store, sessionId, events, run } = await startOrch();
+    vi.spyOn(LlmClient.prototype, "analyze").mockImplementation(() => Promise.reject({ code: "LLM_TIMEOUT", message: "fixture timeout", retryable: true }));
+    const { store, sessionId, events, run } = await startOrch();
     for (const s of segments) store.insertSegment({ ...s, sessionId });
     await run(0, 60000);
     const row = store.db.prepare("SELECT status,error_message FROM analysis_runs WHERE session_id=?").get(sessionId) as { status: string; error_message: string };
@@ -326,8 +360,8 @@ describe("问题2：中文数字与阿拉伯数字归一化匹配（不破坏F3�
   });
   it("N6 归一化后的引文仍能通过F3证据校验（真实orchestrator落库）", async () => {
     const text = "这款精华里面有2裂酵母成分";
-    const { store, sessionId, events, run } = await startOrch();
-    store.saveFramework({ ...fw, rules: [{ ...fw.rules[0], ruleType: "bannedWord" }] });
+    const numFw: Framework = { ...fw, rules: [{ ...fw.rules[0], ruleType: "bannedWord" }] };
+    const { store, sessionId, events, run } = await startOrch(numFw);
     store.insertSegment({ ...seg("risk-n6", 0, 5000, text), sessionId });
     await run(0, 300000);
     const issues = store.listIssues(sessionId) as Array<{ quote: string; segment_ids: string }>;
@@ -336,6 +370,35 @@ describe("问题2：中文数字与阿拉伯数字归一化匹配（不破坏F3�
     const shown = events.filter((e) => e.event === "analysis.issues").flatMap((e) => e.payload as Issue[]);
     expect(shown).toHaveLength(1);
     expect(text).toContain(shown[0].quote);
+  });
+});
+
+describe("第①级真实ASR转写回归（中文TTS口播，非直播）", () => {
+  // 文本逐字来自真实来源库 session 190ba540 的稳态片段，非预制模拟文本。
+  const realTexts = [
+    "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。",
+    "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。",
+    "这款精华的核心成分是烟酰胺，浓度5%。坚持用7天，你就能看到肤色明显提亮。这个是实测数据。",
+    "运营帮我把这个优惠券再上1万张，321上链接，宝宝们直接冲手慢舞。很多姐妹问我敏感肌能不能用，我在这里承诺，所有肤质都可以放心食用，没有任何刺激。",
+    "这款面霜添加了2裂酵母和依克多因修复屏障的效果非常好。换季烂脸的时候，厚涂一层，第二天就稳了。我们现在做的是7天无理由退换货，而且赠送运费险，你收。",
+  ];
+  it("R1 真实文本上的风险点被规则检出且引文逐字属于原文", () => {
+    const all = realTexts.flatMap((t) => matchRules(t, { framework, productFacts: framework.productFacts }).map((h) => ({ t, h })));
+    for (const { t, h } of all) expect(t).toContain(h.matchedText);
+    const quotes = all.map((x) => x.h.matchedText);
+    expect(quotes).toContain("所有肤质");
+    expect(quotes).toContain("没有任何刺激");
+    expect(quotes).toContain("放心食用");
+    expect(quotes.some((q) => q.includes("300多"))).toBe(true);
+    expect(quotes).toContain("坚持用7天");
+    expect(quotes).toContain("浓度5%");
+    // 同一位置不重复报告
+    const keys = all.map((x) => `${x.h.ruleId}|${x.t.indexOf(x.h.matchedText)}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+  it("R2 无风险的首句不产生假命中", () => {
+    const hits = matchRules(realTexts[0], { framework, productFacts: framework.productFacts });
+    expect(hits).toEqual([]);
   });
 });
 

@@ -37,6 +37,15 @@ export interface RealWindowOptions {
   sourceLabel: string;
   confirmedRealAsr: boolean;
   frameworkId?: string;
+  /**
+   * 来源库没有话术框架时，用这个 JSON 提供框架（例如 demo/sample-framework.json）。
+   * 只影响本次隔离分析，绝不写回来源库。
+   */
+  frameworkJsonPath?: string;
+  /** 仅验证脚本使用：放宽整轮超时以适配真实推理模型耗时；生产默认仍为 20 秒。 */
+  llmTimeoutMsOverride?: number;
+  /** 仅验证规则链路：不调用 LLM，报告中必须标注语义分析未跑。 */
+  skipLlm?: boolean;
 }
 
 /** Read live source DB without migration/writes; replay one source window into an isolated memory DB. */
@@ -52,18 +61,27 @@ export async function verifyRealWindow(options: RealWindowOptions) {
     const setting = (key: string) => (source.prepare("SELECT value FROM settings WHERE key=?").get(key) as { value?: string } | undefined)?.value ?? null;
     // runtimeConfig reads only public app_settings; provider key is environment-only.
     const config = readRuntimeLlmConfig({ getSetting: setting } as Store);
-    if (!config) throw new Error("安全LLM环境配置未齐：需DSH_SECRET_LLM_API_KEY及已确认的公开base_url/model");
+    // --skip-llm：仅在没有安全密钥时验证规则引擎与证据校验，明确不宣称真实 LLM 验收。
+    if (!config && !options.skipLlm) throw new Error("安全LLM环境配置未齐：需DSH_SECRET_LLM_API_KEY及已确认的公开base_url/model；如只验证规则链路请显式加 --skip-llm");
     // 发任何真实请求前先确认目标，避免把密钥发到非锁定端点。
-    assertLockedLlmTarget(config);
+    if (config) assertLockedLlmTarget(config);
     const session = source.prepare("SELECT * FROM sessions WHERE id=?").get(options.sessionId) as { started_at_iso: string; ended_at_iso: string | null; audio_source: string; device_id: string | null } | undefined;
     if (!session) throw new Error("来源会话不存在");
-    const frameworkRow = (options.frameworkId
+    let frameworkRow = (options.frameworkId
       ? source.prepare("SELECT * FROM frameworks WHERE id=?").get(options.frameworkId)
       : source.prepare("SELECT * FROM frameworks LIMIT 1").get()) as { id: string; name: string; product_facts: string; updated_at: string } | undefined;
-    if (!frameworkRow) throw new Error("来源数据库没有话术框架，无法验收话术比对");
-    const steps = source.prepare("SELECT id,framework_id AS frameworkId,name,priority,max_wait_ms AS maxWaitMs FROM framework_steps WHERE framework_id=?").all(frameworkRow.id);
-    const rules = (source.prepare("SELECT id,framework_id AS frameworkId,step_id AS stepId,rule_type AS ruleType,pattern,enabled FROM framework_rules WHERE framework_id=?").all(frameworkRow.id) as Array<Record<string, unknown>>).map((r) => ({ ...r, enabled: !!r.enabled }));
-    const framework: Framework = FrameworkSchema.parse({ id: frameworkRow.id, name: frameworkRow.name, productFacts: frameworkRow.product_facts, updatedAt: frameworkRow.updated_at, steps, rules });
+    let framework: Framework;
+    if (frameworkRow) {
+      const steps = source.prepare("SELECT id,framework_id AS frameworkId,name,priority,max_wait_ms AS maxWaitMs FROM framework_steps WHERE framework_id=?").all(frameworkRow.id);
+      const rules = (source.prepare("SELECT id,framework_id AS frameworkId,step_id AS stepId,rule_type AS ruleType,pattern,enabled FROM framework_rules WHERE framework_id=?").all(frameworkRow.id) as Array<Record<string, unknown>>).map((r) => ({ ...r, enabled: !!r.enabled }));
+      framework = FrameworkSchema.parse({ id: frameworkRow.id, name: frameworkRow.name, productFacts: frameworkRow.product_facts, updatedAt: frameworkRow.updated_at, steps, rules });
+    } else if (options.frameworkJsonPath) {
+      // 来源库没有框架：从外部 JSON 读，只用于本次隔离分析，不写回来源库。
+      const raw = JSON.parse(fs.readFileSync(path.resolve(options.frameworkJsonPath), "utf8")) as { framework?: unknown };
+      framework = FrameworkSchema.parse((raw as { framework?: unknown }).framework ?? raw);
+    } else {
+      throw new Error("来源数据库没有话术框架；请用 --framework-json 提供框架文件，不要往用户数据库写数据");
+    }
     const windowStartMs = Math.max(0, options.windowEndMs - 300000);
     const rows = source.prepare("SELECT id,session_id AS sessionId,connection_id AS connectionId,source_seq AS sourceSeq,start_ms AS startMs,end_ms AS endMs,text,is_final AS isFinal,created_at AS createdAt FROM transcript_segments WHERE session_id=? AND is_final=1 AND start_ms<? AND end_ms>? ORDER BY start_ms").all(options.sessionId, options.windowEndMs, windowStartMs) as Array<Record<string, unknown>>;
     const segments: TranscriptSegment[] = rows.map((r) => TranscriptSegmentSchema.parse({ ...r, isFinal: !!r.isFinal }));
@@ -74,11 +92,25 @@ export async function verifyRealWindow(options: RealWindowOptions) {
     memory.saveFramework(framework);
     for (const s of segments) memory.insertSegment(s);
     for (const iv of intervals) memory.insertSpeechInterval(iv);
-    const llm = new LlmClient(); llm.configure(config);
+    const llm = new LlmClient();
+    if (config) {
+      const effective = options.llmTimeoutMsOverride && options.llmTimeoutMsOverride > 0
+        ? { ...config, request_timeout_ms: options.llmTimeoutMsOverride }
+        : config;
+      llm.configure(effective, options.llmTimeoutMsOverride ? { maxTimeoutMs: options.llmTimeoutMsOverride } : undefined);
+    }
     const phase = new ScriptLoopState(); for (const s of segments) phase.feed(s.text, s.endMs);
     const orch = new SessionOrchestrator(memory);
-    // Deliberately don't call start(): no capture, ASR connection or source DB writes.
-    Object.assign(orch, { sessionId: options.sessionId, sessionStartEpoch: Date.now() - options.windowEndMs, llm, scriptState: phase });
+    // 不调用 start()：不启动采集、不连 ASR、不写来源库。
+    // 但必须同步 llmState，否则 runAnalysis 会按"未配置"跳过语义分析，
+    // 脚本会静默退化成"只跑本地规则"，那不是真实 LLM 验收。
+    Object.assign(orch, {
+      sessionId: options.sessionId,
+      sessionStartEpoch: Date.now() - options.windowEndMs,
+      llm,
+      llmState: config ? "configured" : "not_configured",
+      scriptState: phase,
+    });
     const events: Array<{ event: string; payload: unknown }> = [];
     orch.setWindow({ isDestroyed: () => false, webContents: { send: (event: string, payload: unknown) => events.push({ event, payload }) } } as never);
     await (orch as unknown as { runAnalysis: (a: number, b: number) => Promise<void> }).runAnalysis(windowStartMs, options.windowEndMs);
@@ -87,26 +119,40 @@ export async function verifyRealWindow(options: RealWindowOptions) {
     const runs = memory.db.prepare("SELECT status,error_message FROM analysis_runs WHERE session_id=?").all(options.sessionId) as Array<{ status: string; error_message: string | null }>;
     const shown = events.filter((e) => e.event === "analysis.issues").flatMap((e) => e.payload as Issue[]);
     const byId = new Map(segments.map((s) => [s.id, s]));
-    const allEvidenceValid = shown.every((issue) => issue.segmentIds.length > 0 && issue.segmentIds.every((id) => byId.has(id)) && issue.segmentIds.some((id) => byId.get(id)!.text.includes(issue.quote)));
+    // 注意：空集上做 every() 恒为 true，会把「一条问题都没产出」误报成
+    // 「证据全部有效」。这里显式区分「无可验证样本」，避免指标误导。
+    const checkedIssueCount = shown.length;
+    const invalidIssueCount = shown.filter((issue) =>
+      !(issue.segmentIds.length > 0
+        && issue.segmentIds.every((id) => byId.has(id))
+        && issue.segmentIds.some((id) => byId.get(id)!.text.includes(issue.quote))),
+    ).length;
+    const allEvidenceValid = checkedIssueCount > 0 && invalidIssueCount === 0;
+    const evidenceNote = checkedIssueCount === 0
+      ? "本次没有任何问题通过证据校验（可能为0问题、也可能被门禁全部拒绝），无可验证样本，不能据此宣称证据校验通过"
+      : `已校验 ${checkedIssueCount} 条问题，无效 ${invalidIssueCount} 条`;
     const result = {
-      verificationKind: "operator-confirmed-real-asr-window-live-llm",
+      verificationKind: config ? "operator-confirmed-real-asr-window-live-llm" : "operator-confirmed-real-asr-window-rules-only",
       executedAtIso: new Date().toISOString(),
+      semanticAnalysisRan: !!config,
+      semanticAnalysisNote: config ? "真实LLM已调用" : "未调用LLM（无安全密钥或显式--skip-llm）：本结果只覆盖规则引擎与证据校验，不构成真实LLM验收",
       sourceLabel: options.sourceLabel,
       sourceSessionId: options.sessionId,
       sourceConfirmation: "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
       window: { startMs: windowStartMs, endMs: options.windowEndMs },
-      model: config.model,
+      model: config?.model ?? null,
       lockedTarget: { base_url: LOCKED_LLM_BASE_URL, model: LOCKED_LLM_MODEL },
       requestCount: llm.budgetUsed,
       transcriptSegmentCount: segments.length,
       allDisplayedEvidenceValid: allEvidenceValid,
+      evidenceCheck: { checkedIssueCount, invalidIssueCount, note: evidenceNote },
       analysisRuns: runs,
       displayedIssues: shown,
       sourceSegments: segments,
       reviewStatus: { reviewedRealCandidates: 0, requiredRealCandidates: 20, falsePositiveRate: "未实测", falseNegativeRate: "未实测" },
       report,
     };
-    const redactText = (text: string) => text.replaceAll(config.api_key, "[REDACTED]");
+    const redactText = (text: string) => (config ? text.replaceAll(config.api_key, "[REDACTED]") : text);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, redactText(JSON.stringify(result, null, 2)), "utf8");
     fs.writeFileSync(`${outputPath}.html`, redactText(buildHtmlReport(report)), "utf8");
@@ -129,6 +175,8 @@ if (require.main === module) {
     sourceLabel: cliValue(argv, "--source-label"),
     confirmedRealAsr: argv.includes("--confirm-real-asr"),
     frameworkId: argv.includes("--framework-id") ? cliValue(argv, "--framework-id") : undefined,
+    frameworkJsonPath: argv.includes("--framework-json") ? cliValue(argv, "--framework-json") : undefined,
+    skipLlm: argv.includes("--skip-llm"),
   })).then((result) => {
     console.log(JSON.stringify(result));
     if (result.status !== "success" || !result.allEvidenceValid) process.exitCode = 1;

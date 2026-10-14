@@ -75,6 +75,19 @@ app.whenReady().then(() => {
   store = new Store(dbPath);
   orchestrator = new SessionOrchestrator(store);
 
+  // 上一次进程被强杀/崩溃时不会走正常收尾，会话会以 active 一直留着继续采样、
+  // 继续计费，并把后续场次的声音记进旧会话（实测有会话挂过 622 分钟）。
+  // 刚启动时不可能存在本进程的活跃会话，所以这里安全地把历史残留一次性收尾。
+  try {
+    const closed = store.closeStaleSessions("process-restart", new Date().toISOString());
+    if (closed > 0) {
+      console.warn(`[startup] 已收尾 ${closed} 个上次未正常结束的会话`);
+    }
+  } catch (err) {
+    // 收尾失败不能阻止应用启动，但要留痕
+    console.error("[startup] 残留会话收尾失败", err instanceof Error ? err.message : err);
+  }
+
   setLogger((msg, details) => {
     console.error(`[error] ${msg}`, details ?? "");
   });

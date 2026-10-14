@@ -10,6 +10,7 @@ import type {
   Settings,
   Session,
   SessionSummary,
+  ScheduleStatus,
   ScriptStatus,
   StartSessionConfig,
   TranscriptSegment,
@@ -52,6 +53,7 @@ export interface AppEvents {
   "analysis.status": AnalysisStatusLike;
   "analysis.issues": Issue[];
   "script.status": ScriptStatus;
+  "schedule.status": ScheduleStatus;
   "app.error": AppError;
 }
 
@@ -95,6 +97,10 @@ export interface AsrStatusInfo {
   configured: boolean;
   appId?: string;
   source?: ConfigSource;
+  /** 环境变量里的密钥是否存在。 */
+  credentialPresent?: boolean;
+  /** 可直接展示给用户的缺失原因说明。 */
+  message?: string;
 }
 
 export interface LlmStatusInfo {
@@ -102,6 +108,12 @@ export interface LlmStatusInfo {
   baseUrl?: string;
   model?: string;
   source?: ConfigSource;
+  /** 界面可填写的公开配置（Base URL + 模型名）是否齐全。 */
+  publicConfigPresent?: boolean;
+  /** 环境变量里的密钥是否存在。 */
+  credentialPresent?: boolean;
+  /** 可直接展示给用户的缺失原因说明。 */
+  message?: string;
 }
 
 /** Runtime shape of window.appApi including the raw audio ingest hook. */

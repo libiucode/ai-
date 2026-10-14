@@ -6,7 +6,15 @@ import type { WindowMetrics } from "./metrics";
 import { makeError } from "../security/errorFactory";
 
 export type { WindowMetrics };
-export const MAX_ANALYSIS_TIMEOUT_MS = 20000;
+/**
+ * 整轮分析（含重试与一次修复）的硬上限。
+ *
+ * 决策记录（2026-10-14，盯播负责人）：方案第 7 节的 20 秒对真实模型不可用——
+ * 实测单次真实分析需 65 秒（推理型模型），20 秒会让每一条真实语义分析被丢弃。
+ * 现改为硬上限 180 秒；默认 150 秒（见 LlmConfigSchema）必须覆盖
+ * 「一次调用 65s + 一次修复 65s = 130s」，120 秒会在修复路径失败。
+ */
+export const MAX_ANALYSIS_TIMEOUT_MS = 180000;
 
 const AnalysisIssueSchema = LlmIssueSchema.extend({
   stepId: z.string().min(1).nullable().optional(),
@@ -121,12 +129,16 @@ export class LlmClient {
   private budgetUsedInternal = 0;
   get budgetUsed(): number { return this.budgetUsedInternal; }
 
-  configure(raw: unknown) {
+  /**
+   * @param options.maxTimeoutMs 显式超时上限（例如验证脚本放宽）。不传时按
+   *   MAX_ANALYSIS_TIMEOUT_MS（180 秒）夹取，默认值 150 秒来自 LlmConfigSchema。
+   */
+  configure(raw: unknown, options?: { maxTimeoutMs?: number }) {
     this.config = null;
     const parsed = LlmConfigSchema.safeParse(raw);
     if (!parsed.success) throw makeError("LLM_CONFIG_INVALID", "LLM 配置校验失败", false);
-    // 20s caps the entire round including retries, parsing and one repair.
-    this.config = { ...parsed.data, request_timeout_ms: Math.min(parsed.data.request_timeout_ms, MAX_ANALYSIS_TIMEOUT_MS) };
+    const cap = options?.maxTimeoutMs && options.maxTimeoutMs > 0 ? options.maxTimeoutMs : MAX_ANALYSIS_TIMEOUT_MS;
+    this.config = { ...parsed.data, request_timeout_ms: Math.min(parsed.data.request_timeout_ms, cap) };
   }
 
   async analyze(input: LlmAnalysisInput): Promise<VerifiedAnalysisResult> {

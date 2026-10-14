@@ -1,7 +1,7 @@
 import { Store } from "../storage/store";
 import { computeMetrics } from "../analysis/metrics";
 import { computeStepCoverage, replayScriptPhases } from "../analysis/ruleEngine";
-import type { Issue, ReportSummary, ScriptReport } from "../../shared/contracts";
+import type { Issue, ReportSummary, ScriptReport, SessionEndReason } from "../../shared/contracts";
 import { PHASE_LABEL } from "../../shared/contracts";
 
 function rowToIssue(r: Record<string, unknown>): Issue {
@@ -106,6 +106,7 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       endedAtIso: session.ended_at_iso,
       audioSource: session.audio_source,
       listenedMs,
+      endReason: (session.end_reason as SessionEndReason | null) ?? null,
     },
     asr: {
       // ASR connection/gap events are not persisted yet. Analysis runs cannot

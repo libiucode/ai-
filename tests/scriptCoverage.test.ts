@@ -85,15 +85,61 @@ describe("步骤覆盖计算", () => {
     { phase: "cta", startMs: 180000, endMs: 180000 },
   ];
 
-  it("最长停留超过 maxWaitMs 即超时；不限时步骤永不超时", () => {
+  it("每个步骤只统计自己阶段的停留，不再共享同一个最大值", () => {
     const coverage = computeStepCoverage(framework, phases);
     const byName = Object.fromEntries(coverage.map((c) => [c.step.name, c]));
-    // 所有阶段中最长停留 160s
-    expect(byName["开场白"].maxStayMs).toBe(160000);
-    expect(byName["开场白"].overdue).toBe(true); // 160s > 120s
-    expect(byName["福利预告"].overdue).toBe(true); // 160s > 60s
-    expect(byName["收尾感谢"].overdue).toBe(false); // 160s < 300s
-    expect(byName["不限时环节"].overdue).toBe(false); // maxWaitMs=0
+    // 开场白→opening(5s-20s=15s)；福利预告→interaction(无区间=0)；
+    // 收尾感谢→cta(180s-180s=0)；不限时环节→无法映射=0
+    expect(byName["开场白"].phase).toBe("opening");
+    expect(byName["开场白"].maxStayMs).toBe(15000);
+    expect(byName["开场白"].overdue).toBe(false); // 15s < 120s
+    expect(byName["福利预告"].phase).toBe("interaction");
+    expect(byName["福利预告"].maxStayMs).toBe(0); // 该阶段没有出现过
+    expect(byName["福利预告"].overdue).toBe(false);
+    expect(byName["收尾感谢"].phase).toBe("cta");
+    expect(byName["收尾感谢"].overdue).toBe(false);
+    expect(byName["不限时环节"].phase).toBeNull();
+    expect(byName["不限时环节"].maxStayMs).toBe(0);
+    expect(byName["不限时环节"].overdue).toBe(false);
+    // 关键回归：不再所有步骤拿到同一个 160000
+    const stays = coverage.map((c) => c.maxStayMs);
+    expect(new Set(stays).size).toBeGreaterThan(1);
+  });
+
+  it("步骤超过自己阶段的等待时间才报超时（其他阶段再长也不牵连）", () => {
+    const tight: Framework = {
+      ...framework,
+      steps: [
+        { id: "t1", frameworkId: "f1", name: "开场白", priority: 2, maxWaitMs: 10000 },
+        { id: "t2", frameworkId: "f1", name: "收尾感谢", priority: 0, maxWaitMs: 10000 },
+      ],
+    };
+    const coverage = computeStepCoverage(tight, phases);
+    const byName = Object.fromEntries(coverage.map((c) => [c.step.name, c]));
+    // opening 15s > 10s → 超时；cta 0s → 不超时（旧算法会让它跟着超时）
+    expect(byName["开场白"].overdue).toBe(true);
+    expect(byName["收尾感谢"].overdue).toBe(false);
+  });
+
+  it("显式声明的 phase 优先于名称推断", () => {
+    const explicit: Framework = {
+      ...framework,
+      steps: [{ id: "e1", frameworkId: "f1", name: "开场白", priority: 2, maxWaitMs: 10000, phase: "productIntro" } as never],
+    };
+    const coverage = computeStepCoverage(explicit, phases);
+    expect(coverage[0].phase).toBe("productIntro");
+    expect(coverage[0].maxStayMs).toBe(160000); // productIntro 20s-180s
+  });
+
+  it("无法映射阶段的步骤返回 phase=null 且不计超时（不猜测）", () => {
+    const unknown: Framework = {
+      ...framework,
+      steps: [{ id: "u1", frameworkId: "f1", name: "随便一个环节", priority: 2, maxWaitMs: 1 }],
+    };
+    const coverage = computeStepCoverage(unknown, phases);
+    expect(coverage[0].phase).toBeNull();
+    expect(coverage[0].maxStayMs).toBe(0);
+    expect(coverage[0].overdue).toBe(false);
   });
 
   it("没有识别到阶段时最长停留为 0、不超时", () => {
@@ -156,8 +202,10 @@ describe("报告的话术步骤覆盖章节", () => {
       { phase: "cta", startMs: 180000, endMs: 180000 },
     ]);
     const byName = Object.fromEntries(report!.script!.steps.map((s) => [s.name, s]));
-    expect(byName["开场白"].overdue).toBe(true);
-    expect(byName["开场白"].maxStayMs).toBe(160000);
+    // 开场白只统计自己的 opening 区间 5000→20000 = 15s，不再是所有阶段的最大值 160s
+    expect(byName["开场白"].maxStayMs).toBe(15000);
+    expect(byName["开场白"].overdue).toBe(false); // 15s < 120s
+    expect(byName["收尾感谢"].maxStayMs).toBe(0); // cta 区间为 0 长度
     expect(byName["收尾感谢"].overdue).toBe(false);
     expect(byName["不限时环节"].overdue).toBe(false);
   });

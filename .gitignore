@@ -10,3 +10,9 @@ logs-electron.txt
 logs-electron.err
 capture-probe-*.json
 diag-out.txt
+
+# 采音探针的原始 PCM 抓取（二进制、单文件 1.4MB，无复现价值——脚本本身才是有价值的部分）
+*.raw
+scripts/asr-bench/probe-pcm/
+# 探针的一次性输出（时间戳命名，每次跑都会重新生成）
+scripts/asr-bench/out/

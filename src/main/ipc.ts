@@ -16,7 +16,7 @@ import { TencentAsrAdapter } from "./asr/tencentAdapter";
 import { buildReportSummary, buildHtmlReport } from "./report/reportBuilder";
 import fs from "node:fs";
 import path from "node:path";
-import { readRuntimeAsrConfig, readRuntimeLlmConfig, withoutCredentials } from "./security/runtimeConfig";
+import { readRuntimeAsrConfig, readRuntimeLlmConfig, withoutCredentials, diagnoseAsrConfig, diagnoseLlmConfig } from "./security/runtimeConfig";
 
 /** Session-scoped test adapter so connect tests never touch the live orchestrator ASR. */
 let testAsr: TencentAsrAdapter | null = null;
@@ -133,6 +133,10 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
           audioSource: row.audio_source,
           deviceId: row.device_id,
           status: row.status,
+          frameworkId: row.framework_id,
+          speakerId: row.speaker_id,
+          speakerName: row.speaker_name,
+          endReason: row.end_reason,
         },
         segments: store.querySegments({ sessionId, finalOnly: true }),
         issues,
@@ -195,11 +199,19 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
   // Credentials never cross IPC or get written to SQLite.
   ipcMain.handle("settings.getAsrStatus", async () => {
     const cfg = readRuntimeAsrConfig(store);
-    return { configured: Boolean(cfg), appId: cfg?.appId ?? "1502622498", source: "environment" };
+    const diag = diagnoseAsrConfig(store);
+    return {
+      configured: Boolean(cfg),
+      appId: cfg?.appId ?? "1502622498",
+      source: "environment",
+      credentialPresent: diag.credentialPresent,
+      message: diag.message,
+    };
   });
 
   ipcMain.handle("settings.getLlmStatus", async () => {
     const cfg = readRuntimeLlmConfig(store);
+    const diag = diagnoseLlmConfig(store);
     let llm: { base_url?: string; model?: string } = {};
     try {
       const raw = store.getSetting("app_settings");
@@ -210,6 +222,9 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
       baseUrl: process.env.DSH_LLM_BASE_URL || llm.base_url || "",
       model: process.env.DSH_LLM_MODEL || llm.model || "",
       source: "environment",
+      publicConfigPresent: diag.publicConfigPresent,
+      credentialPresent: diag.credentialPresent,
+      message: diag.message,
     };
   });
 
@@ -221,7 +236,7 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     if (wantsStoredConfig(rawConfig)) {
       const stored = readStoredAsrConfig(store);
       if (!stored) {
-        return { ok: false, error: { code: "ASR_NOT_CONFIGURED", message: "尚未配置 ASR 环境凭证，请通过安全配置提供 Secret ID 和 Secret Key 后重启应用", retryable: false } };
+        return { ok: false, error: { code: "ASR_NOT_CONFIGURED", message: diagnoseAsrConfig(store).message, retryable: false } };
       }
       config = stored;
     } else {
@@ -262,7 +277,7 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     if (wantsStoredConfig(rawConfig)) {
       const stored = readStoredLlmConfig(store);
       if (!stored) {
-        return { ok: false, error: { code: "LLM_NOT_CONFIGURED", message: "尚未保存 LLM 配置，请先填写并保存", retryable: false } };
+        return { ok: false, error: { code: "LLM_NOT_CONFIGURED", message: diagnoseLlmConfig(store).message, retryable: false } };
       }
       config = stored;
     } else {

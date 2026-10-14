@@ -3,6 +3,7 @@ import { migrate } from "./migrations";
 import type {
   Framework,
   Issue,
+  SessionEndReason,
   SessionSummary,
   SpeechInterval,
   TranscriptSegment,
@@ -26,24 +27,84 @@ export class Store {
     startedAtIso: string;
     audioSource: string;
     deviceId: string | null;
+    /** 本场使用的话术框架 id。历史报告导出时据此还原当时用的框架。 */
+    frameworkId?: string | null;
+    /** 主播稳定标识；聚合对比用 id，改名不影响统计。 */
+    speakerId?: string | null;
+    /** 主播当次显示名快照；历史报告保留当时的名字。 */
+    speakerName?: string | null;
   }) {
     this.db
       .prepare(
-        `INSERT INTO sessions (id, started_at_iso, audio_source, device_id, status)
-         VALUES (?, ?, ?, ?, 'active')`,
+        `INSERT INTO sessions (id, started_at_iso, audio_source, device_id, status, framework_id, speaker_id, speaker_name)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`,
       )
-      .run(s.id, s.startedAtIso, s.audioSource, s.deviceId);
+      .run(
+        s.id,
+        s.startedAtIso,
+        s.audioSource,
+        s.deviceId,
+        s.frameworkId ?? null,
+        s.speakerId ?? null,
+        s.speakerName ?? null,
+      );
   }
 
-  updateSessionStatus(id: string, status: string, endedAtIso?: string) {
+  /**
+   * 会话中切换话术框架时落库。
+   * 必须写库，否则历史导出拿到的是切换前的框架（内存态重启即失）。
+   */
+  updateSessionFramework(id: string, frameworkId: string): boolean {
+    const res = this.db
+      .prepare(`UPDATE sessions SET framework_id = ? WHERE id = ?`)
+      .run(frameworkId, id);
+    return res.changes > 0;
+  }
+
+  updateSessionStatus(id: string, status: string, endedAtIso?: string, endReason?: SessionEndReason) {
     this.db
-      .prepare(`UPDATE sessions SET status = ?, ended_at_iso = COALESCE(?, ended_at_iso) WHERE id = ?`)
-      .run(status, endedAtIso ?? null, id);
+      .prepare(
+        `UPDATE sessions SET status = ?, ended_at_iso = COALESCE(?, ended_at_iso),
+           end_reason = COALESCE(?, end_reason) WHERE id = ?`,
+      )
+      .run(status, endedAtIso ?? null, endReason ?? null, id);
+  }
+
+  /**
+   * 启动时清理上一进程遗留的活跃会话。
+   *
+   * 历史事故：进程被强杀/崩溃时不会走正常收尾，会话会以 active 状态一直留着——
+   * 实测有大会话挂了 622 分钟仍在「采集中」，继续采样、继续计费、并污染后续场次。
+   * 进程刚启动时不可能有本进程的活跃会话，所以这里可以安全地全部收尾。
+   */
+  closeStaleSessions(reason: SessionEndReason, nowIso: string): number {
+    const res = this.db
+      .prepare(
+        `UPDATE sessions SET status = 'stopped', ended_at_iso = COALESCE(ended_at_iso, ?),
+           end_reason = COALESCE(end_reason, ?)
+         WHERE status IN ('active', 'paused', 'stopping')`,
+      )
+      .run(nowIso, reason);
+    if (res.changes > 0) {
+      this.setSetting("last_stale_close_reason", JSON.stringify({ at: nowIso, reason, count: res.changes }));
+    }
+    return res.changes;
   }
 
   getSession(id: string) {
     return this.db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
-      | { id: string; started_at_iso: string; ended_at_iso: string | null; audio_source: string; device_id: string | null; status: string }
+      | {
+          id: string;
+          started_at_iso: string;
+          ended_at_iso: string | null;
+          audio_source: string;
+          device_id: string | null;
+          status: string;
+          framework_id: string | null;
+          speaker_id: string | null;
+          speaker_name: string | null;
+          end_reason: string | null;
+        }
       | undefined;
   }
 
@@ -52,6 +113,7 @@ export class Store {
     const rows = this.db
       .prepare(
         `SELECT s.id, s.started_at_iso, s.ended_at_iso, s.audio_source, s.status,
+           s.framework_id, s.speaker_id, s.speaker_name, s.end_reason,
            (SELECT COUNT(*) FROM transcript_segments t
              WHERE t.session_id = s.id AND t.is_final = 1) AS final_segment_count,
            (SELECT COUNT(*) FROM issues i WHERE i.session_id = s.id) AS issue_count
@@ -67,6 +129,10 @@ export class Store {
       finalSegmentCount: r.final_segment_count as number,
       issueCount: r.issue_count as number,
       hasGap: false,
+      frameworkId: (r.framework_id as string) ?? null,
+      speakerId: (r.speaker_id as string) ?? null,
+      speakerName: (r.speaker_name as string) ?? null,
+      endReason: (r.end_reason as SessionEndReason) ?? null,
     }));
   }
 

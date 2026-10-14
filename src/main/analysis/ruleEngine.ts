@@ -16,10 +16,16 @@ const DEFAULT_ABSOLUTIZATION_PATTERNS = [
   "绝对",
   "百分之百",
   "100%",
-  "所有人",
   "七天见效",
   "肯定有效",
   "一定见效",
+  // 第①级真实转写暴露的遗漏：承诺类与全称量词
+  // 注意：此处覆盖「所有人」，不再单列字面「所有人」，避免同一处双命中。
+  "所有(?:肤质|肌肤|人群|宝宝|人)",
+  "(?:没有|无)任何(?:刺激|副作用|添加|不适)",
+  "放心(?:食用|口服)",
+  "全网最(?:低|好|便宜|划算)",
+  "(?:国家|世界|全球)级",
 ];
 
 const DEFAULT_UNVERIFIED_PATTERNS = [
@@ -35,39 +41,48 @@ const DEFAULT_UNVERIFIED_PATTERNS = [
   "政府认证",
   "获得.*奖项",
   "销量第一",
+  // 第①级真实转写暴露的遗漏：比价、效果期限、即时效果、成分配比
+  "(?:平时|专柜|官网|官方|旗舰店)[^。，,！!？?]{0,8}(?:都)?(?:要|卖|是)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?\\s*(?:多)?",
+  "(?:坚持|连续)(?:用|使用|喝|吃|涂抹)?\\s*\\d+\\s*(?:天|周|月)",
+  "第[一二三四五六七八九十\\d]+天[^。，,！!？?]{0,6}(?:就|便)",
+  "浓度\\s*\\d+(?:\\.\\d+)?\\s*[%％]",
 ];
 
 /**
- * 仅用于规则匹配的中文数字↔阿拉伯数字归一化。
+ * 仅用于规则匹配的数字归一化。
  *
  * 背景：ASR 的 convert_num_mode=1 会把「二裂酵母」识别成「2裂酵母」，
- * 导致写「二裂酵母」的热词规则匹配不上转写原文。这里双向归一化
- * （二→2、2→二）后只用于判定是否命中，绝不改写原文：
- * quote 仍必须逐字来自片段原文，F3 证据校验不受影响。
+ * 导致写「二裂酵母」的热词规则匹配不上转写原文。
+ *
+ * 做法：把文本和规则都规范化到「阿拉伯数字」这一种形态，因此只需要一个
+ * 变体，不存在多形态互相干扰的问题。同时维护字符级索引映射，命中后能
+ * 精确回到原文区间，quote 保证逐字来自原文，存储原文与 F3 证据校验不受影响。
  */
 const CN_DIGITS: Record<string, string> = { 零: "0", 〇: "0", 一: "1", 二: "2", 两: "2", 三: "3", 四: "4", 五: "5", 六: "6", 七: "7", 八: "8", 九: "9" };
 const CN_UNITS: Record<string, number> = { 十: 10, 百: 100, 千: 1000, 万: 10000, 亿: 100000000 };
 
-/**
- * 把中文数字折叠为阿拉伯数字串。
- * 「十二」→「12」，「五百」→「500」，「二十五」→「25」。
- * 解析失败时原样返回，绝不猜测。
- */
-function chineseToArabic(text: string): string {
+export interface NormalizedText {
+  /** 规范化后的文本（中文数字已折叠为阿拉伯数字） */
+  text: string;
+  /** map[i] = 规范化文本第 i 个字符对应的原文起始下标；map[text.length] = 原文长度 */
+  map: number[];
+}
+
+/** 把中文数字折叠为阿拉伯数字，并保留到原文的字符级索引映射。 */
+export function normalizeDigits(text: string): NormalizedText {
   let out = "";
+  const map: number[] = [];
   let i = 0;
-  // 连续的中文数字段：按 位值 累加，段尾整体替换为阿拉伯数字。
   while (i < text.length) {
     const start = i;
     let total = 0;
-    let section = 0; // 当前待与高位相加的低位段
+    let section = 0;
     let sawUnit = false;
     while (i < text.length) {
       const ch = text[i];
       if (ch in CN_DIGITS) { section = section * 10 + Number(CN_DIGITS[ch]); i++; continue; }
       if (ch in CN_UNITS) {
         const unit = CN_UNITS[ch];
-        // 「十」前没有数字时按 1 计（如「十二」）
         const coef = section === 0 && !sawUnit ? 1 : section;
         if (unit >= 10000) { total = (total + section) * unit; section = 0; }
         else { total += coef * unit; section = 0; }
@@ -77,44 +92,22 @@ function chineseToArabic(text: string): string {
       }
       break;
     }
-    if (i === start) { out += text[i]; i++; continue; }
-    out += String(total + section);
+    if (i === start) { out += text[i]; map.push(i); i++; continue; }
+    if (sawUnit || section > 0) {
+      const digits = String(total + section);
+      for (let k = 0; k < digits.length; k++) { out += digits[k]; map.push(start); }
+    } else {
+      out += text.slice(start, i);
+      for (let k = start; k < i; k++) map.push(k);
+    }
   }
-  return out;
+  map.push(text.length);
+  return { text: out, map };
 }
 
-/** 阿拉伯数字转中文数字（个位、十位、百位、千位，够覆盖商品名与时长中的数字）。 */
-function arabicToChinese(text: string): string {
-  const CN = "零一二三四五六七八九";
-  const under1000 = (n: number): string => {
-    const hundreds = Math.floor(n / 100);
-    const rest = n % 100;
-    let out = hundreds > 0 ? `${CN[hundreds]}百` : "";
-    if (rest === 0) return out || "零";
-    const tens = Math.floor(rest / 10);
-    const ones = rest % 10;
-    if (tens === 0) out += hundreds > 0 ? `零${CN[ones]}` : CN[ones];
-    else if (tens === 1) out += `十${ones === 0 ? "" : CN[ones]}`;
-    else out += `${CN[tens]}十${ones === 0 ? "" : CN[ones]}`;
-    return out;
-  };
-  return text.replace(/\d+/g, (digits) => {
-    const n = Number(digits);
-    if (!Number.isFinite(n) || n > 9999) return digits;
-    if (n < 10) return CN[n];
-    if (n < 1000) return under1000(n);
-    const thousands = Math.floor(n / 1000);
-    const rest = n % 1000;
-    return `${CN[thousands]}千${rest === 0 ? "" : rest < 100 ? `零${under1000(rest)}` : under1000(rest)}`;
-  });
-}
-
-/** 生成用于匹配判定的归一化文本：中文数字→阿拉伯数字 + 阿拉伯数字→中文数字，两种形态都参与。 */
-export function normalizeForMatching(text: string): string[] {
-  const arabic = chineseToArabic(text);
-  const chinese = arabicToChinese(text);
-  if (arabic === text && chinese === text) return [text];
-  return [text, arabic, chinese];
+/** 规则侧：把中文数字折叠为阿拉伯数字，使规则与规范化文本可比。 */
+export function normalizePatternNumerals(pattern: string): string {
+  return normalizeDigits(pattern).text;
 }
 
 export interface RuleEngineInput {
@@ -145,40 +138,40 @@ export function matchRules(
     }
   }
 
-  // 同一规则的多种数字形态只报一次，避免「二裂」和「2裂」双弹窗。
+  // 文本只规范化一次；规则也做同样的数字折叠，因此不存在多形态互相干扰。
+  const normalized = normalizeDigits(text);
   const seen = new Set<string>();
   for (const p of patterns) {
     let re: RegExp;
     try {
-      re = new RegExp(p.pattern, "g");
+      re = new RegExp(normalizePatternNumerals(p.pattern), "g");
     } catch {
       continue; // invalid regex pattern from user config: skip
     }
-    for (const variant of normalizeForMatching(text)) {
-      re.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(variant)) !== null) {
-        if (!m[0]) { re.lastIndex++; continue; }
-        // 命中位置回到原文，保证 quote 逐字来自原文而非归一化文本。
-        // 变体可能因数字形态长度不同而位移，因此按匹配长度从变体同位置回切，
-        // 并校验回切结果确实在原文中；对不上时用归一化前的原文位置兜底。
-        const end = Math.min(m.index + m[0].length, variant.length);
-        const sliceFromVariant = variant.slice(m.index, end);
-        const sliceFromOriginal = text.slice(m.index, m.index + m[0].length);
-        const quote = text.includes(sliceFromVariant) ? sliceFromVariant : sliceFromOriginal;
-        if (!quote || !text.includes(quote)) { re.lastIndex++; continue; }
-        const key = `${p.id}|${m.index}|${quote}`;
-        if (seen.has(key)) { re.lastIndex += m[0].length; continue; }
-        seen.add(key);
-        hits.push({
-          ruleId: p.id,
-          ruleType: p.type,
-          pattern: p.pattern,
-          stepId: p.stepId ?? null,
-          matchedText: quote,
-        });
-        if (m.index === re.lastIndex) re.lastIndex++;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(normalized.text)) !== null) {
+      if (!m[0]) { re.lastIndex++; continue; }
+      const end = Math.min(m.index + m[0].length, normalized.text.length);
+      // 用字符级映射把规范化区间还原成原文区间，quote 逐字来自原文。
+      const originalStart = normalized.map[m.index];
+      const originalEnd = normalized.map[end] ?? text.length;
+      if (originalStart === undefined || originalEnd === undefined || originalEnd <= originalStart) {
+        re.lastIndex += m[0].length;
+        continue;
       }
+      const quote = text.slice(originalStart, originalEnd);
+      if (!quote) { re.lastIndex += m[0].length; continue; }
+      const key = `${p.id}|${originalStart}|${originalEnd}`;
+      if (seen.has(key)) { re.lastIndex += m[0].length; continue; }
+      seen.add(key);
+      hits.push({
+        ruleId: p.id,
+        ruleType: p.type,
+        pattern: p.pattern,
+        stepId: p.stepId ?? null,
+        matchedText: quote,
+      });
+      if (m.index === re.lastIndex) re.lastIndex++;
     }
   }
   return hits;
@@ -228,12 +221,18 @@ export class ScriptLoopState {
     this.phaseEnteredMs = nowMs;
   }
 
-  /** Framework step overdue check: returns steps whose maxWaitMs is exceeded. */
+  /**
+   * Framework step overdue check: returns steps whose maxWaitMs is exceeded.
+   *
+   * 历史缺陷：对所有步骤都用「当前阶段停留时长」判定，导致阶段一长就所有步骤
+   * 一起报超时。现在只判定「自己映射到当前阶段」的步骤；无法映射到阶段的步骤
+   * 不做超时断言（宁可漏报也不误报）。
+   */
   overdueSteps(framework: Framework | null, nowMs: number): string[] {
     if (!framework || this.phase === "idle") return [];
     const elapsed = nowMs - this.phaseEnteredMs;
     return framework.steps
-      .filter((s) => s.maxWaitMs > 0 && elapsed > s.maxWaitMs)
+      .filter((s) => stepPhaseOf(s) === this.phase && s.maxWaitMs > 0 && elapsed > s.maxWaitMs)
       .map((s) => s.name);
   }
 }
@@ -269,19 +268,63 @@ export function replayScriptPhases(
 
 export interface StepCoverage {
   step: FrameworkStep;
-  /** 所有已识别阶段中最长的一次停留 */
+  /** 该步骤所属阶段中的最长一次停留；无法映射到任何阶段时为 0 */
   maxStayMs: number;
   overdue: boolean;
+  /** 该步骤映射到的阶段；null 表示无法从步骤配置推断阶段 */
+  phase: ScriptPhase | null;
 }
 
-/** 单步骤覆盖统计。超时规则与实时面板一致：最长停留 > maxWaitMs 即超时（maxWaitMs=0 表示不限时）。 */
+/**
+ * 步骤 → 阶段 的映射。
+ *
+ * 历史缺陷：`computeStepCoverage` 对所有步骤都返回同一个「所有阶段最长停留」，
+ * 因为阶段和步骤之间根本没有映射，覆盖统计因此失真（每个步骤看起来要么全超时、
+ * 要么全不超时）。模块 A 的「讲全了没有」直接依赖这个映射。
+ *
+ * 映射优先级：
+ * 1. 步骤显式声明的 `phase`（话术框架编辑期可选字段，最可靠）；
+ * 2. 步骤绑定的规则命中的阶段（见 coverageFromRuleHits，证据最强）；
+ * 3. 步骤名称关键词（下面的表），作为没有显式声明时的保守推断。
+ * 推断不出阶段时返回 null，调用方必须按「未知」处理，不得猜测。
+ */
+const STEP_PHASE_KEYWORDS: Array<{ phase: ScriptPhase; re: RegExp }> = [
+  // 先判 cta：价格/售后/促单类步骤名常同时含「介绍」等词，避免误归到 productIntro
+  { phase: "cta", re: /促单|成交|下单|价格|优惠|折扣|库存|售后|退换|运费|链接|收尾|结束|感谢|秒杀|抢购/ },
+  { phase: "interaction", re: /互动|评论|弹幕|关注|点赞|答疑|问答|提问|抽奖|福利|粉丝|连麦/ },
+  { phase: "opening", re: /开场|开场白|欢迎|自我介绍|暖场|新来|开播/ },
+  { phase: "productIntro", re: /卖点|产品|商品|介绍|痛点|需求|功效|成分|材质|规格|用法|使用|演示|对比|场景|容量|颜色/ },
+];
+
+/** 步骤显式声明的阶段（话术框架可选字段；未声明时为 undefined）。 */
+export function declaredStepPhase(step: FrameworkStep): ScriptPhase | null {
+  const value = (step as FrameworkStep & { phase?: unknown }).phase;
+  return typeof value === "string" && value !== "idle" ? (value as ScriptPhase) : null;
+}
+
+/** 由步骤名称推断阶段；推断不出返回 null（不猜测）。 */
+export function inferStepPhase(step: FrameworkStep): ScriptPhase | null {
+  for (const { phase, re } of STEP_PHASE_KEYWORDS) {
+    if (re.test(step.name)) return phase;
+  }
+  return null;
+}
+
+/** 步骤对应的阶段：显式声明优先，其次名称关键词，都没有则 null。 */
+export function stepPhaseOf(step: FrameworkStep): ScriptPhase | null {
+  return declaredStepPhase(step) ?? inferStepPhase(step);
+}
+
+/** 单步骤覆盖统计。只统计该步骤自己阶段的停留，不再让所有步骤共享同一个最大值。 */
 export function computeStepCoverage(
   framework: Framework,
   phases: ReplayedPhase[],
 ): StepCoverage[] {
   return framework.steps.map((step) => {
-    const maxStayMs = phases.reduce((max, p) => Math.max(max, p.endMs - p.startMs), 0);
-    const overdue = step.maxWaitMs > 0 && maxStayMs > step.maxWaitMs;
-    return { step, maxStayMs, overdue };
+    const phase = stepPhaseOf(step);
+    const maxStayMs = phase === null
+      ? 0
+      : phases.reduce((max, p) => (p.phase === phase ? Math.max(max, p.endMs - p.startMs) : max), 0);
+    return { step, maxStayMs, overdue: step.maxWaitMs > 0 && maxStayMs > step.maxWaitMs, phase };
   });
 }

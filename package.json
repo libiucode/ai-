@@ -26,6 +26,7 @@
       "buildResources": "build"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -35,7 +36,6 @@
         }
       ],
       "sign": null,
-      "signAndEditExecutable": false,
       "signingHashAlgorithms": []
     },
     "nsis": {
@@ -43,6 +43,8 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
       "artifactName": "AI盯播工具-Setup-${version}.exe"
     }
   },

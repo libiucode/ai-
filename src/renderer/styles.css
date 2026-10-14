@@ -208,6 +208,17 @@ body {
 .status-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .status-actions .select { width: 190px; }
 
+/* 设备故障时高亮音源下拉：用户下一步动作就是重选设备，让目标一眼可见 */
+.select-fault {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+  animation: fault-pulse 1.8s ease-in-out infinite;
+}
+@keyframes fault-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.06); }
+}
+
 .meter-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .meter-label { font-size: 12px; color: var(--text-dim); width: 28px; }
 .meter { flex: 1; height: 8px; background: #eceef1; border-radius: 4px; overflow: hidden; }

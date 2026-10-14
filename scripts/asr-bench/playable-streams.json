@@ -1,0 +1,50 @@
+[
+  {
+    "name": "CCTV-1 (720p)",
+    "url": "http://74.91.26.218:82/live/cctv1hd.m3u8",
+    "probe": "8.0s mean=3027 peak=100.0% nz=98%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-1 HD (1080p)",
+    "url": "http://69.30.245.50/live/cctv1.m3u8",
+    "probe": "8.0s mean=3027 peak=100.0% nz=98%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-10 (720p)",
+    "url": "http://74.91.26.218:82/live/cctv10hd.m3u8",
+    "probe": "8.0s mean=1867 peak=84.0% nz=96%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-11 (720p)",
+    "url": "http://74.91.26.218:82/live/cctv11hd.m3u8",
+    "probe": "8.0s mean=1927 peak=87.9% nz=97%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-12 (720p)",
+    "url": "http://74.91.26.218:82/live/cctv12hd.m3u8",
+    "probe": "8.0s mean=2499 peak=60.4% nz=88%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-13 (720p)",
+    "url": "http://74.91.26.218:82/live/cctv13hd.m3u8",
+    "probe": "8.0s mean=3970 peak=100.0% nz=98%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-13 HD (1080p)",
+    "url": "http://go.bkpcp.top/mg/cctv13",
+    "probe": "8.0s mean=3970 peak=100.0% nz=98%",
+    "seconds": 8
+  },
+  {
+    "name": "CCTV-14 HD (1080p)",
+    "url": "http://74.91.26.218:82/live/cctv14hd.m3u8",
+    "probe": "8.0s mean=820 peak=53.4% nz=85%",
+    "seconds": 8
+  }
+]

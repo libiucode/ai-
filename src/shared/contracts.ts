@@ -5,7 +5,31 @@ export interface Session {
   audioSource: "microphone" | "systemLoopback";
   deviceId: string | null;
   status: "active" | "paused" | "stopped";
+  /** 本场使用的话术框架 id。历史报告导出据此还原当时用的框架（内存态重启即失）。 */
+  frameworkId?: string | null;
+  /** 主播稳定标识；聚合对比用，改名不影响统计。 */
+  speakerId?: string | null;
+  /** 主播当次显示名快照；历史报告保留当时的名字（有意的可追溯性）。 */
+  speakerName?: string | null;
+  /**
+   * 会话结束原因。三种自动结束（排期窗口到点 / 长时间无音频 / 残留收尾）
+   * 都写 status='stopped' + ended_at，不写原因就无法事后区分它们与用户手点结束。
+   */
+  endReason?: SessionEndReason | null;
 }
+
+/**
+ * 会话结束原因。
+ * - `user`：用户手动点「结束」。
+ * - `schedule-window-end`：到了排期配置的结束时刻，自动结束。
+ * - `process-restart`：上次进程被强杀/崩溃，启动时收尾的历史残留。
+ * - `no-audio-timeout`：长时间无音频自动结束（尚未实施，预留）。
+ */
+export type SessionEndReason =
+  | "user"
+  | "schedule-window-end"
+  | "process-restart"
+  | "no-audio-timeout";
 
 export interface TranscriptSegment {
   id: string;
@@ -196,6 +220,16 @@ export interface AsrStatus {
   lastPartialMs: number;
   gapDetected: boolean;
   lastError: AppError | null;
+  /**
+   * WebSocket 关闭码（1000 正常 / 1006 异常断开无关闭帧）。
+   * 2026-10-15 加：排查断线事故时发现适配器丢弃了 code/reason，
+   * 只能靠数据库侧会话状态反推根因，绕了一大圈。
+   */
+  closeCode?: number;
+  /** WebSocket 关闭原因（服务端可能给出说明文本）。 */
+  closeReason?: string;
+  /** 关闭前最近一次服务端业务错误码（如 4008 空闲超时）。 */
+  lastServerErrorCode?: number;
 }
 
 export interface AppError {
@@ -230,7 +264,8 @@ export interface WindowMetrics {
   repeatCandidate: { text: string; count: number } | null;
 }
 
-export type ReportFormat = "markdown" | "json";
+/** 报告导出格式。html 产出 HTML 文件，json 产出 JSON。改名兼容说明见 ReportFormatSchema。 */
+export type ReportFormat = "html" | "json";
 
 export interface AudioDevice {
   id: string;
@@ -249,6 +284,13 @@ export interface SessionSummary {
   finalSegmentCount: number;
   issueCount: number;
   hasGap: boolean;
+  /** 本场使用的话术框架 id（老记录为 null）。 */
+  frameworkId?: string | null;
+  /** 主播稳定标识与当次名字快照。 */
+  speakerId?: string | null;
+  speakerName?: string | null;
+  /** 结束原因（老记录为 null，表示无法追溯）。 */
+  endReason?: SessionEndReason | null;
 }
 
 /** Aggregated report data built from the real database. */
@@ -259,6 +301,8 @@ export interface ReportSummary {
     endedAtIso: string | null;
     audioSource: string;
     listenedMs: number;
+    /** 结束原因。报告要能说明「这场为什么停了」，尤其是自动结束的场次。 */
+    endReason: SessionEndReason | null;
   };
   asr: {
     connectionCount: number | null;
@@ -306,6 +350,41 @@ export interface ReportSummary {
   generatedAtIso: string;
 }
 
+/**
+ * 定时监听配置（模块 A「自播质检」用）。
+ *
+ * ⚠️ 本轮只落数据结构与界面，**尚未接通调度**。
+ * 原因见 docs/unattended-capture-research.md：采集入口受 Chromium user activation 约束，
+ * 程序自身（定时器/启动回调）无法触发 `getDisplayMedia`，所以"到点自动开录"必须先解决
+ * 一次性授权复用（路线 A）或原生采集（路线 C），那是后续工作。
+ */
+export interface ScheduleConfig {
+  enabled: boolean;
+  /** 开始时间，"HH:mm"（本地时间） */
+  startTime: string;
+  /** 结束时间，"HH:mm"（本地时间）。小于等于 startTime 时表示跨天，次日结束。 */
+  endTime: string;
+  /** 生效的星期，0=周日 … 6=周六。空数组等价于每天。 */
+  weekdays: number[];
+  /** 自动开始时使用的音源 */
+  audioSource: "microphone" | "systemLoopback";
+  /** 自动开始时使用的话术框架 id；null 表示用列表里的第一个 */
+  frameworkId: string | null;
+}
+
+/**
+ * 排期运行态（主进程 → 渲染层）。
+ *
+ * 「到点自动开始」与「到点自动结束」是两件独立的事，能力边界完全不同：
+ * - 自动开始：受 Chromium user activation 硬约束，**本期未接通**。
+ * - 自动结束：不依赖任何用户手势，**本期已接通**。
+ * 所以这里只报结束时刻，不谎报开始能力。
+ */
+export interface ScheduleStatus {
+  /** 本场会话绑定的排期结束时刻；null 表示本场不按排期结束。 */
+  scheduledEndAtIso: string | null;
+}
+
 export interface Settings {
   llm?: {
     base_url?: string;
@@ -327,6 +406,7 @@ export interface Settings {
   windowSizeSec: 180 | 300 | 600;
   paceThreshold?: number;
   silenceThresholdMs?: number;
+  schedule?: ScheduleConfig;
 }
 
 export interface StartSessionConfig {
@@ -334,4 +414,6 @@ export interface StartSessionConfig {
   deviceId?: string | null;
   windowIntervalSec?: number;
   windowSizeSec?: number;
+  /** 本场会话使用的话术框架 id。缺省或匹配不到时回退到第一个框架。 */
+  frameworkId?: string | null;
 }

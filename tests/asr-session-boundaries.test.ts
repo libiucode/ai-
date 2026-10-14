@@ -9,7 +9,11 @@ import { Store } from "../src/main/storage/store";
 const resources: Array<{ store: Store; dir: string; orch: SessionOrchestrator }> = [];
 afterEach(async () => {
   for (const { orch, store, dir } of resources.splice(0)) {
-    await orch.stop(); store.close(); fs.rmSync(dir, { recursive: true, force: true });
+    await orch.stop(); store.close();
+    // Windows 上 better-sqlite3 的 close() 之后，文件句柄/索引器可能尚未完全释放，
+    // rmSync 会偶发 ENOTEMPTY（已在 10-15 00:32 的全量跑中实测到一次，单独复跑通过）。
+    // 这不是被测行为的问题，加 retries 让清理具备可重试性，避免全量结果随机变红。
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
   vi.restoreAllMocks(); vi.useRealTimers();
 });
@@ -68,6 +72,10 @@ describe("ASR session audio boundaries", () => {
   });
 
   it("late LLM responses remain in their original session and do not update a new session's UI", async () => {
+    // LLM 需处于已配置态，否则本测试验证的"迟到响应仍归旧场"链路不会执行。
+    vi.stubEnv("DSH_SECRET_LLM_API_KEY", "fixture-boundary-key");
+    vi.stubEnv("DSH_LLM_BASE_URL", "http://127.0.0.1:3425/v1");
+    vi.stubEnv("DSH_LLM_MODEL", "group/auto-step-5-preview");
     const { orch, store, events } = await setup();
     const originalSession = orch.getSnapshot().sessionId!;
     store.insertSegment({ id: "old-segment", sessionId: originalSession, connectionId: "old-connection", sourceSeq: 0, startMs: 0, endMs: 900, text: "直播测试", isFinal: true, createdAt: new Date().toISOString() });

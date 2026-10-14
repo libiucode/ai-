@@ -1,0 +1,322 @@
+{
+  "verificationKind": "operator-confirmed-real-asr-window-live-llm",
+  "executedAtIso": "2026-10-14T15:59:36.327Z",
+  "semanticAnalysisRan": true,
+  "semanticAnalysisNote": "真实LLM已调用",
+  "sourceLabel": "CCTV-13 real live stream via system loopback",
+  "sourceSessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+  "sourceConfirmation": "由操作人员确认来源，数据库记录本身不能证明录音来源真实性",
+  "window": {
+    "startMs": 0,
+    "endMs": 125000
+  },
+  "model": "group/auto-step-5-preview",
+  "lockedTarget": {
+    "base_url": "http://127.0.0.1:3425/v1",
+    "model": "group/auto-step-5-preview"
+  },
+  "requestCount": 1,
+  "transcriptSegmentCount": 4,
+  "allDisplayedEvidenceValid": true,
+  "evidenceCheck": {
+    "checkedIssueCount": 4,
+    "invalidIssueCount": 0,
+    "note": "已校验 4 条问题，无效 0 条"
+  },
+  "analysisRuns": [
+    {
+      "status": "success",
+      "error_message": null
+    }
+  ],
+  "displayedIssues": [
+    {
+      "id": "787390fe-ff80-483c-bcca-a35693516e3e",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "analysisRunId": "1cf716ec-e5ac-4180-8abc-ea02b98ab521",
+      "type": "absolutization",
+      "severity": "critical",
+      "startMs": 0,
+      "endMs": 24480,
+      "segmentIds": [
+        "39eccb26-3a16-4023-b55e-af5202b892cc"
+      ],
+      "quote": "能把血液中的血糖统统转化成能量",
+      "basis": "使用“统统”等绝对化用语对血糖转化效果作出完全化承诺，涉及疾病治疗功效，需提供已核实依据",
+      "recommendation": "立即删除绝对化承诺，改为客观成分介绍，并提示用户血糖管理需遵医嘱",
+      "suggestedScript": "本品含丹参等草本提取成分，日常饮食中需注意糖分摄入，具体健康管理请咨询医生。",
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "af8fcd13-68c2-40aa-8afc-2174bbfe2db2",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "analysisRunId": "1cf716ec-e5ac-4180-8abc-ea02b98ab521",
+      "type": "unverifiedClaim",
+      "severity": "critical",
+      "startMs": 24480,
+      "endMs": 53940,
+      "segmentIds": [
+        "b9af9c76-4bcf-409f-abb9-01436f113b08"
+      ],
+      "quote": "快速激活胰岛细胞，恢复胰岛素的分泌，实现自主降糖，并通过27天次序对全身器官的修复",
+      "basis": "包含激活胰岛、恢复胰岛素分泌、自主降糖及27天器官修复等未核实功效宣称，无已核实商品事实支撑",
+      "recommendation": "暂停播放该疗效承诺，补充产品备案或临床数据，否则修改为普通食品或成分科普表述",
+      "suggestedScript": "该配方含多种草本成分，具体保健功能以产品注册备案为准，请理性消费。",
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "51702c98-4761-4fb5-9ab7-7087f263a435",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "analysisRunId": "1cf716ec-e5ac-4180-8abc-ea02b98ab521",
+      "type": "absolutization",
+      "severity": "critical",
+      "startMs": 53940,
+      "endMs": 114240,
+      "segmentIds": [
+        "8792038b-e024-4980-8778-c9b49fceb206"
+      ],
+      "quote": "当天血糖不再高",
+      "basis": "以绝对化时间承诺“当天”血糖不再高，属于高风险疗效保证，需提供已核实依据",
+      "recommendation": "删除当天见效承诺，改为辅助调节类表述，并引导用户以医嘱为准",
+      "suggestedScript": "本品为草本配方，建议结合饮食运动，血糖监测请以医院检测为准。",
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    },
+    {
+      "id": "e96c47f5-386a-4736-88a0-db08043bd4a2",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "analysisRunId": "1cf716ec-e5ac-4180-8abc-ea02b98ab521",
+      "type": "unverifiedClaim",
+      "severity": "critical",
+      "startMs": 114240,
+      "endMs": 124780,
+      "segmentIds": [
+        "b5f64531-f7f3-4919-97b1-ef92aa7c8b0f"
+      ],
+      "quote": "你会亲眼见到血糖恢复到500左右的正常范围",
+      "basis": "宣称使用后当天血糖恢复至500左右正常范围，涉及具体疗效及数值误导，无已核实依据",
+      "recommendation": "立即下架该片段，删除具体数值和疗效承诺，改为无功效导向的产品介绍",
+      "suggestedScript": "本产品为传统草本配方，不具有疾病治疗功效，糖尿病患者请遵医嘱用药并定期监测血糖。",
+      "confidence": 0.95,
+      "needsReview": true,
+      "status": "open"
+    }
+  ],
+  "sourceSegments": [
+    {
+      "id": "39eccb26-3a16-4023-b55e-af5202b892cc",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "connectionId": "d3b06868-ce19-4e09-a5bf-84c068ebee01",
+      "sourceSeq": 0,
+      "startMs": 0,
+      "endMs": 24480,
+      "text": "跟丹参配伍，能提取出高倍浓缩的化糖肽，具有强大的化痰作用，能把血液中的血糖统统转化成能量，输送到心、脑、肝、肾、胰道、神经等各个组织器官，让人体的五脏六腑都能得到营养。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:45:56.981Z"
+    },
+    {
+      "id": "b9af9c76-4bcf-409f-abb9-01436f113b08",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "connectionId": "d3b06868-ce19-4e09-a5bf-84c068ebee01",
+      "sourceSeq": 1,
+      "startMs": 24480,
+      "endMs": 53940,
+      "text": "吃进多少糖，转化多少糖，血糖不高了细胞，而一母三子，也就是知木与沙渊子、枸杞子、五味子配伍，能萃取出独特天然的火乙酶，快速激活胰岛细胞，恢复胰岛素的分泌，实现自主降糖，并通过27天次序对全身器官的修复。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:46:26.611Z"
+    },
+    {
+      "id": "8792038b-e024-4980-8778-c9b49fceb206",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "connectionId": "d3b06868-ce19-4e09-a5bf-84c068ebee01",
+      "sourceSeq": 2,
+      "startMs": 53940,
+      "endMs": 114240,
+      "text": "让糖尿病心脏病、糖尿病脑血管儿病、糖尿病眼病、糖尿病肾病、糖尿病足糖尿27天就能实现血糖平稳不再高，放开吃喝能做到远离降糖镇咳药并发症状全甩掉的四大康复目标。二期糖方有奇效，化痰活夷亮绝招，当天血糖不再高，27天病发消第一绝双簧双身糖化掉，当天血糖不再高。二七糖方从黄连、黄芪、人参、丹参中提取高倍浓缩的化糖肽，能在1~2分钟内被人体吸收。它能在第一时间抑制血液中血糖毒性，减少糖毒对血管的刺激及组织器官的损伤。同时，化糖肽能将血糖转化为能量，并将能量。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:47:26.924Z"
+    },
+    {
+      "id": "b5f64531-f7f3-4919-97b1-ef92aa7c8b0f",
+      "sessionId": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "connectionId": "d3b06868-ce19-4e09-a5bf-84c068ebee01",
+      "sourceSeq": 3,
+      "startMs": 114240,
+      "endMs": 124780,
+      "text": "输送到C体外使用当天，你会亲眼见到血糖恢复到500左右的正常范围。头脑清醒，心口痛快，浑。",
+      "isFinal": true,
+      "createdAt": "2026-10-14T15:47:37.357Z"
+    }
+  ],
+  "reviewStatus": {
+    "reviewedRealCandidates": 0,
+    "requiredRealCandidates": 20,
+    "falsePositiveRate": "未实测",
+    "falseNegativeRate": "未实测"
+  },
+  "report": {
+    "session": {
+      "id": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "startedAtIso": "2026-10-14T15:45:31.915Z",
+      "endedAtIso": "2026-10-14T15:59:36.318Z",
+      "audioSource": "systemLoopback",
+      "listenedMs": 844403
+    },
+    "asr": {
+      "connectionCount": null,
+      "disconnectCount": null,
+      "gapCount": null
+    },
+    "issues": {
+      "total": 4,
+      "bySeverity": {
+        "info": 0,
+        "warning": 0,
+        "critical": 4
+      },
+      "byType": {
+        "absolutization": 2,
+        "unverifiedClaim": 2
+      },
+      "confirmed": 0,
+      "needsReview": 4
+    },
+    "issueTimeline": [
+      {
+        "issueId": "787390fe-ff80-483c-bcca-a35693516e3e",
+        "type": "absolutization",
+        "severity": "critical",
+        "firstSeenMs": 0,
+        "quote": "能把血液中的血糖统统转化成能量",
+        "segmentIds": [
+          "39eccb26-3a16-4023-b55e-af5202b892cc"
+        ],
+        "basis": "使用“统统”等绝对化用语对血糖转化效果作出完全化承诺，涉及疾病治疗功效，需提供已核实依据",
+        "recommendation": "立即删除绝对化承诺，改为客观成分介绍，并提示用户血糖管理需遵医嘱"
+      },
+      {
+        "issueId": "af8fcd13-68c2-40aa-8afc-2174bbfe2db2",
+        "type": "unverifiedClaim",
+        "severity": "critical",
+        "firstSeenMs": 24480,
+        "quote": "快速激活胰岛细胞，恢复胰岛素的分泌，实现自主降糖，并通过27天次序对全身器官的修复",
+        "segmentIds": [
+          "b9af9c76-4bcf-409f-abb9-01436f113b08"
+        ],
+        "basis": "包含激活胰岛、恢复胰岛素分泌、自主降糖及27天器官修复等未核实功效宣称，无已核实商品事实支撑",
+        "recommendation": "暂停播放该疗效承诺，补充产品备案或临床数据，否则修改为普通食品或成分科普表述"
+      },
+      {
+        "issueId": "51702c98-4761-4fb5-9ab7-7087f263a435",
+        "type": "absolutization",
+        "severity": "critical",
+        "firstSeenMs": 53940,
+        "quote": "当天血糖不再高",
+        "segmentIds": [
+          "8792038b-e024-4980-8778-c9b49fceb206"
+        ],
+        "basis": "以绝对化时间承诺“当天”血糖不再高，属于高风险疗效保证，需提供已核实依据",
+        "recommendation": "删除当天见效承诺，改为辅助调节类表述，并引导用户以医嘱为准"
+      },
+      {
+        "issueId": "e96c47f5-386a-4736-88a0-db08043bd4a2",
+        "type": "unverifiedClaim",
+        "severity": "critical",
+        "firstSeenMs": 114240,
+        "quote": "你会亲眼见到血糖恢复到500左右的正常范围",
+        "segmentIds": [
+          "b5f64531-f7f3-4919-97b1-ef92aa7c8b0f"
+        ],
+        "basis": "宣称使用后当天血糖恢复至500左右正常范围，涉及具体疗效及数值误导，无已核实依据",
+        "recommendation": "立即下架该片段，删除具体数值和疗效承诺，改为无功效导向的产品介绍"
+      }
+    ],
+    "metrics": {
+      "speechMs": 124000,
+      "silenceMs": 780,
+      "chineseChars": 395,
+      "englishWords": 1,
+      "charsPerSpeechMinute": 192,
+      "charsPerTotalMinute": 190,
+      "longestSilenceMs": 400
+    },
+    "llm": {
+      "requestCount": null,
+      "failedCount": null,
+      "estimatedTokens": 633
+    },
+    "analysisRuns": {
+      "total": 1,
+      "success": 1,
+      "failed": 0
+    },
+    "script": {
+      "frameworkName": "保温杯讲解一轮（模拟商品资料）",
+      "phases": [],
+      "steps": [
+        {
+          "name": "开场：介绍主播和商品，欢迎新观众；不许承诺未证实效果",
+          "priority": 2,
+          "maxWaitMs": 60000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "需求：说明通勤和日常饮水场景，询问观众常用杯子容量",
+          "priority": 1,
+          "maxWaitMs": 90000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "必讲卖点：500mL容量、304不锈钢内胆、米白和深蓝两色；引用商家资料",
+          "priority": 2,
+          "maxWaitMs": 120000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "使用与限制：清洗、留出杯口空间、旋紧杯盖；不要装干冰或强酸强碱",
+          "priority": 2,
+          "maxWaitMs": 180000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "互动：读一条真实评论并回答；邀请喜欢讲解的观众关注和点赞",
+          "priority": 1,
+          "maxWaitMs": 180000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "价格与售后：只报页面实时到手价，说明平台退换货规则；不编造原价折扣库存",
+          "priority": 2,
+          "maxWaitMs": 240000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "成交引导：提示查看购物车规格和颜色，核对实际价格后自主下单；开始新轮讲解",
+          "priority": 1,
+          "maxWaitMs": 300000,
+          "maxStayMs": 0,
+          "overdue": false
+        },
+        {
+          "name": "可选补充：在真实观众提问时演示清洗杯盖",
+          "priority": 0,
+          "maxWaitMs": 0,
+          "maxStayMs": 0,
+          "overdue": false
+        }
+      ]
+    },
+    "generatedAtIso": "2026-10-14T15:59:36.327Z"
+  }
+}

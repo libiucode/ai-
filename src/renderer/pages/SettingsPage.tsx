@@ -1,7 +1,18 @@
 import { useEffect, useState } from "react";
-import type { Settings } from "../../shared/contracts";
+import type { Framework, ScheduleConfig, Settings } from "../../shared/contracts";
+import { WEEKDAY_LABEL, formatCountdown, nextScheduledStart } from "../../shared/schedule";
 import type { AsrStatusInfo, LlmStatusInfo } from "../../shared/api";
 import { Badge, Button, Field, Panel, tokens } from "../ui/basics";
+
+/** 默认排期：每天 20:00–23:00 系统声音。 */
+const DEFAULT_SCHEDULE: ScheduleConfig = {
+  enabled: false,
+  startTime: "20:00",
+  endTime: "23:00",
+  weekdays: [],
+  audioSource: "systemLoopback",
+  frameworkId: null,
+};
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -21,22 +32,43 @@ export function SettingsPage() {
   /** 配置来源是否为环境变量（主进程从进程 env 读密钥）。 */
   const asrFromEnv = asrStatus?.source === "environment";
   const llmFromEnv = llmStatus?.source === "environment";
+  /** 话术框架列表，供排期选择"用哪个框架"。 */
+  const [frameworks, setFrameworks] = useState<Framework[]>([]);
+  /** 每秒心跳，让"下次自动开始"倒计时会走。 */
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     void reload();
   }, []);
 
   async function reload() {
-    const [s, asrInfo, llmInfo] = await Promise.all([
+    const [s, asrInfo, llmInfo, fws] = await Promise.all([
       window.appApi.getSettings(),
       window.appApi.getAsrStatus(),
       window.appApi.getLlmStatus(),
+      window.appApi.listFrameworks().catch(() => [] as Framework[]),
     ]);
     setSettings(s);
     setAsrStatus(asrInfo);
     setLlmStatus(llmInfo);
+    setFrameworks(fws);
     setLlmBaseUrl(s.llm?.base_url ?? "");
     setLlmModel(s.llm?.model ?? "");
+  }
+
+  const schedule: ScheduleConfig = settings?.schedule ?? DEFAULT_SCHEDULE;
+  const nextStart = nextScheduledStart(schedule, now);
+
+  /** 更新排期配置（只改本地编辑态，点「保存全部设置」才落库）。 */
+  function updateSchedule(patch: Partial<ScheduleConfig>) {
+    if (!settings) return;
+    setSettings({ ...settings, schedule: { ...schedule, ...patch } });
+    setMsg(null);
   }
 
   async function doSave() {
@@ -247,6 +279,116 @@ export function SettingsPage() {
             }
           />
         </Field>
+      </Panel>
+
+      <Panel title="定时监听（无人值守）">
+        {/*
+          诚实提示：本轮只落配置与计算，"到点自动开录"尚未接通。
+          原因见 docs/unattended-capture-research.md —— 采集入口受 Chromium user activation 约束，
+          定时器/启动回调都无法触发 getDisplayMedia，必须先解决一次性授权复用或原生采集。
+          这里必须写明，否则用户配好时间等一晚上没开录，会以为是 bug。
+        */}
+        <div className="callout callout-warn" style={{ marginTop: 0, marginBottom: 12 }}>
+          ⚠ <b>该功能尚未接通</b>：本页配置会被保存，但到点<b>不会自动开始录制</b>。
+          受浏览器安全模型限制（系统声音采集需要用户当次手动授权），自动开录需要先完成
+          「一次性授权复用」改造。当前请仍手动点「监听系统声音」。
+        </div>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={schedule.enabled}
+            onChange={(e) => updateSchedule({ enabled: e.target.checked })}
+          />
+          启用定时监听排期
+        </label>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Field label="开始时间">
+            <input
+              className="input"
+              type="time"
+              style={{ width: 140 }}
+              value={schedule.startTime}
+              onChange={(e) => updateSchedule({ startTime: e.target.value })}
+            />
+          </Field>
+          <Field label="结束时间">
+            <input
+              className="input"
+              type="time"
+              style={{ width: 140 }}
+              value={schedule.endTime}
+              onChange={(e) => updateSchedule({ endTime: e.target.value })}
+            />
+          </Field>
+        </div>
+        {schedule.endTime <= schedule.startTime ? (
+          <div style={{ fontSize: 12, color: tokens.textDim, marginTop: -6, marginBottom: 12 }}>
+            结束时间早于开始时间，将按<b>跨天</b>处理（{schedule.startTime} 开始，次日 {schedule.endTime} 结束）。
+          </div>
+        ) : null}
+
+        <Field label="生效星期" hint="不选任何一天表示每天生效。">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {WEEKDAY_LABEL.map((label, idx) => {
+              const on = schedule.weekdays.includes(idx);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`btn${on ? " btn-primary" : ""}`}
+                  style={{ padding: "4px 10px" }}
+                  onClick={() =>
+                    updateSchedule({
+                      weekdays: on
+                        ? schedule.weekdays.filter((d) => d !== idx)
+                        : [...schedule.weekdays, idx].sort((a, b) => a - b),
+                    })
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+
+        <Field label="音源">
+          <select
+            className="input select"
+            value={schedule.audioSource}
+            onChange={(e) => updateSchedule({ audioSource: e.target.value as ScheduleConfig["audioSource"] })}
+          >
+            <option value="systemLoopback">系统声音</option>
+            <option value="microphone">麦克风</option>
+          </select>
+        </Field>
+
+        <Field label="话术框架" hint="不选则使用框架列表中的第一个。">
+          <select
+            className="input select"
+            value={schedule.frameworkId ?? ""}
+            onChange={(e) => updateSchedule({ frameworkId: e.target.value || null })}
+          >
+            <option value="">（默认：第一个框架）</option>
+            {frameworks.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div style={{ fontSize: 13, marginTop: 4 }}>
+          下次自动开始：
+          {nextStart ? (
+            <>
+              <b>{nextStart.toLocaleString()}</b>
+              <span style={{ color: tokens.textDim, marginLeft: 8 }}>（{formatCountdown(nextStart, now)}）</span>
+            </>
+          ) : (
+            <span style={{ color: tokens.textDim }}>未启用或无有效排期</span>
+          )}
+        </div>
       </Panel>
 
       <Panel title="本地数据">

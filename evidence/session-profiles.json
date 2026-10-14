@@ -1,0 +1,372 @@
+{
+  "generatedAt": "2026-10-14T16:31:25.823Z",
+  "sessions": [
+    {
+      "id": "d61e4b32-8bef-4496-9884-86714c409420",
+      "start": "2026-10-14T16:08:56.243Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 1,
+      "intervals": 144,
+      "lastEndMs": 37600,
+      "maxGapMs": 2800,
+      "maxGapFrom": 15000,
+      "maxGapTo": 17800,
+      "contentJumps": [],
+      "headTexts": [
+        {
+          "at": 320,
+          "text": "打扫的地方，并且看到的他身上背着的背包，这一刻啊，然后他这个图设置计划失败了，然然后人家口里边了一口，给撵出来了吧。"
+        }
+      ],
+      "tailTexts": []
+    },
+    {
+      "id": "b217299a-c982-4ba8-9958-a51c9a5fc856",
+      "start": "2026-10-14T16:00:35.935Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 9,
+      "intervals": 1218,
+      "lastEndMs": 245000,
+      "maxGapMs": 400,
+      "maxGapFrom": 3800,
+      "maxGapTo": 4200,
+      "contentJumps": [],
+      "headTexts": [
+        {
+          "at": 0,
+          "text": "以后啊。"
+        },
+        {
+          "at": 4260,
+          "text": "走到哪儿，咱们的家啊，就在那儿啊。少博啊，你去吧，郭兄过去了。"
+        }
+      ],
+      "tailTexts": [
+        {
+          "at": 188120,
+          "text": "爹，收下，对，这我可不能收，是我欠他的，这，这些钱你就收下吧，赵兄和我们情同受足。"
+        },
+        {
+          "at": 200480,
+          "text": "你们都很想他？慢来去，快走，快快快快跟上宪兵队伍，征调兵士来了。母亲保重，待儿归来，丞相命至，照顾好自己。虎，别再哭喊。"
+        }
+      ]
+    },
+    {
+      "id": "5970a6d6-faee-4e5e-954b-65135f1d235a",
+      "start": "2026-10-14T15:53:19.103Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 2,
+      "intervals": 2225,
+      "lastEndMs": 551200,
+      "maxGapMs": 2000,
+      "maxGapFrom": 335800,
+      "maxGapTo": 337800,
+      "contentJumps": [],
+      "headTexts": [
+        {
+          "at": 0,
+          "text": "一天无理由退换货。"
+        },
+        {
+          "at": 4120,
+          "text": "而且赠送运费险。"
+        }
+      ],
+      "tailTexts": []
+    },
+    {
+      "id": "2920b432-96b4-4fb0-ad73-2c1b407651bb",
+      "start": "2026-10-14T15:45:31.915Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 44,
+      "intervals": 2632,
+      "lastEndMs": 742400,
+      "maxGapMs": 49800,
+      "maxGapFrom": 124400,
+      "maxGapTo": 174200,
+      "contentJumps": [
+        {
+          "jumpMs": 49160,
+          "fromMs": 124780,
+          "toMs": 173940
+        },
+        {
+          "jumpMs": 32700,
+          "fromMs": 175880,
+          "toMs": 208580
+        }
+      ],
+      "headTexts": [
+        {
+          "at": 0,
+          "text": "跟丹参配伍，能提取出高倍浓缩的化糖肽，具有强大的化痰作用，能把血液中的血糖统统转化成能量，输送到心、脑、肝、肾、胰道、神经等各个组织器官，让"
+        },
+        {
+          "at": 24480,
+          "text": "吃进多少糖，转化多少糖，血糖不高了细胞，而一母三子，也就是知木与沙渊子、枸杞子、五味子配伍，能萃取出独特天然的火乙酶，快速激活胰岛细胞，恢复"
+        }
+      ],
+      "tailTexts": [
+        {
+          "at": 714580,
+          "text": "这碗煮面霜自添加了2列酵母，以及伊克多斯灌了修复屏障的笑感，在直播间说这换季烂脸的时候拍下无亦认发。顺丰第二天就问了江浙沪次日达，我们现在做"
+        },
+        {
+          "at": 732340,
+          "text": "你收到这场，是品牌专直接退，所有没有都是官方仓直发。咱们这款专柜装进口的假一赔海外直邮宝贝一瓶。"
+        }
+      ]
+    },
+    {
+      "id": "a83d2607-44d9-4bd1-946a-135bef8bf992",
+      "start": "2026-10-14T15:03:06.231Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 518,
+      "lastEndMs": 157657.5,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "e0624009-3113-4354-9cc3-f923a410e085",
+      "start": "2026-10-14T14:52:16.816Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 1793,
+      "lastEndMs": 451600,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "190ba540-c53b-4807-ab6f-56e2e54345c7",
+      "start": "2026-10-14T14:40:56.567Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 5,
+      "intervals": 183,
+      "lastEndMs": 59000,
+      "maxGapMs": 1000,
+      "maxGapFrom": 14000,
+      "maxGapTo": 15000,
+      "contentJumps": [],
+      "headTexts": [
+        {
+          "at": 4980,
+          "text": "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。"
+        },
+        {
+          "at": 14800,
+          "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。"
+        }
+      ],
+      "tailTexts": [
+        {
+          "at": 35660,
+          "text": "运营帮我把这个优惠券再上1万张，321上链接，宝宝们直接冲手慢舞。很多姐妹问我敏感肌能不能用，我在这里承诺，所有肤质都可以放心食用，没有任何"
+        },
+        {
+          "at": 48060,
+          "text": "这款面霜添加了2裂酵母和依克多因修复屏障的效果非常好。换季烂脸的时候，厚涂一层，第二天就稳了。我们现在做的是7天无理由退换货，而且赠送运费险"
+        }
+      ]
+    },
+    {
+      "id": "ae85dc7c-dcb8-41a6-926d-ea13dd20f98b",
+      "start": "2026-10-14T14:37:41.954Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 7,
+      "intervals": 196,
+      "lastEndMs": 63000,
+      "maxGapMs": 1000,
+      "maxGapFrom": 13200,
+      "maxGapTo": 14200,
+      "contentJumps": [],
+      "headTexts": [
+        {
+          "at": 4000,
+          "text": "大家好，欢迎来到直播间。今天给大家带来一款王炸单品，这个真的是我无限回购的一款。"
+        },
+        {
+          "at": 13900,
+          "text": "家人们，谁懂啊？这个价格我真的会谢。官方旗舰店平时都要300多，今天在我直播间直接给你打下来。"
+        }
+      ],
+      "tailTexts": [
+        {
+          "at": 47680,
+          "text": "这款面霜添加了二裂酵母和依克多，因修复屏障的效果非常好。换季烂脸的时候厚涂一层，第二天就稳了。"
+        },
+        {
+          "at": 55400,
+          "text": "我们现在做的是7天无理由退换货，而且赠送运费险。你收到货不满意，直接退，没有任何风险。"
+        }
+      ]
+    },
+    {
+      "id": "0aba4651-c73f-4653-95c3-498953804b70",
+      "start": "2026-10-14T14:21:10.338Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "f0640155-7826-4288-b204-10b1363fd878",
+      "start": "2026-10-14T14:12:48.613Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "481e0ac0-cdde-4964-a9a2-339a6e790616",
+      "start": "2026-10-14T14:06:16.519Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "e8365c22-1f55-4e90-a232-018ca721c4f4",
+      "start": "2026-10-14T14:02:00.522Z",
+      "status": "stopped",
+      "audioSource": "systemLoopback",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "014dd64a-dbdb-4a76-bad1-6b7f5fef20ec",
+      "start": "2026-10-14T06:40:47.416Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "859fa656-5e6c-4789-bc0e-edbfff65330c",
+      "start": "2026-10-14T04:31:58.781Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "14b751d7-11ce-4b61-a6be-687d68fe4882",
+      "start": "2026-10-14T04:18:30.372Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "2202b848-d928-4ab7-91d9-765adfd538e2",
+      "start": "2026-10-14T03:15:15.345Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "da616545-d0d5-4e06-ad55-c44b969551ba",
+      "start": "2026-10-14T02:47:03.358Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    },
+    {
+      "id": "1ca6bdad-e25a-4eb9-9872-5a402759a492",
+      "start": "2026-10-14T02:05:58.232Z",
+      "status": "stopped",
+      "audioSource": "microphone",
+      "segments": 0,
+      "intervals": 0,
+      "lastEndMs": 0,
+      "maxGapMs": 0,
+      "maxGapFrom": null,
+      "maxGapTo": null,
+      "contentJumps": [],
+      "headTexts": [],
+      "tailTexts": []
+    }
+  ]
+}

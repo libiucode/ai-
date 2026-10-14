@@ -4,6 +4,7 @@ import type {
   AsrStatus,
   AudioStatus,
   Issue,
+  ScheduleStatus,
   ScriptStatus,
   TranscriptSegment,
 } from "../../shared/contracts";
@@ -44,6 +45,8 @@ export function useMonitorState() {
   const [asr, setAsr] = useState<AsrStatus | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisStatusLike | null>(null);
   const [script, setScript] = useState<ScriptStatus | null>(null);
+  /** 本场会话绑定的排期结束时刻；null 表示不按排期结束。 */
+  const [scheduleStatus, setScheduleStatus] = useState<ScheduleStatus | null>(null);
   const [partials, setPartials] = useState<Array<{ key: string; text: string }>>([]);
   const [finals, setFinals] = useState<TranscriptSegment[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -101,6 +104,9 @@ export function useMonitorState() {
       window.appApi.subscribeEvents("script.status", (st) => {
         setScript(st);
       }),
+      window.appApi.subscribeEvents("schedule.status", (st) => {
+        setScheduleStatus(st);
+      }),
       window.appApi.subscribeEvents("app.error", (err) => {
         setErrors((prev) => [err, ...prev].slice(0, 20));
       }),
@@ -117,6 +123,7 @@ export function useMonitorState() {
       setErrors([]);
       setAnalysis(null);
       setScript(null);
+      setScheduleStatus(null);
       setHasTranscriptGap(false);
       setLastFinalAt(null);
       try {
@@ -173,6 +180,7 @@ export function useMonitorState() {
     asr,
     analysis,
     script,
+    scheduleStatus,
     partials: trimmedPartials,
     finals,
     issues,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import type { Issue, TranscriptSegment } from "../../shared/contracts";
+import type { Issue, ScheduleConfig, TranscriptSegment } from "../../shared/contracts";
 import { PHASE_LABEL } from "../../shared/contracts";
+import { formatCountdown, nextScheduledStart } from "../../shared/schedule";
 import {
   Badge,
   Button,
@@ -14,6 +15,7 @@ import {
   tokens,
 } from "../ui/basics";
 import { PRIORITY_LABEL } from "./frameworkSchema";
+import { SILENCE_WARN_MS, shouldWarnSilence } from "./captureFault";
 import { useMonitorState } from "../hooks/useMonitorState";
 import { startLoopbackCapture, startMicCapture, type CaptureHandle } from "../capture/audioCapture";
 
@@ -29,12 +31,6 @@ interface DeviceOption {
  * 0.005 作为"算有声音"的门槛，留了底噪裕量又不至于漏掉小声说话。
  */
 const SILENCE_LEVEL_THRESHOLD = 0.005;
-/** 连续无声多久后报警。 */
-const SILENCE_WARN_MS = 5000;
-/** 只有这些状态下无声才值得报警：采集在跑、本该有声音。
- *  paused 不报警（采集已主动停止，无声是预期）；
- *  starting/stopping/idle/completed/error 也不报（没有在监听）。 */
-const LISTENING_STATES = ["capturing", "reconnecting", "analyzing"];
 
 export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   const mon = useMonitorState();
@@ -50,6 +46,13 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   /** 连续无声警告状态。见 silenceTick() 注释。 */
   const [silenceWarning, setSilenceWarning] = useState(false);
   const lastLoudRef = useRef<number>(0);
+  /**
+   * 设备级故障（轨道结束 / 被静音超时 / 设备从列表消失）。
+   * 与"内容静音"是两码事：这里是"采不到了"，该换设备，不是该查音量。
+   * 设备故障期间抑制无声告警——两条矛盾提示同屏会让用户懵，
+   * 而无人值守下最容易发生的误判就是"以为只是没人说话"。
+   */
+  const [deviceFault, setDeviceFault] = useState<{ code: string; reason: string } | null>(null);
 
   // 1s heartbeat for countdown + duration display
   useEffect(() => {
@@ -60,21 +63,20 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   /**
    * 无声检测。电平回调 onLevel 每音频帧（约 85ms）触发一次，
    * 这里用 1s 定时器比较"最后一次听到声音"到现在的间隔。
-   * 只在 LISTENING_STATES 内判定：暂停时采集已停，不报警；
-   * 声音恢复（level 超阈值）立即清除警告。
+   * 判据统一走 captureFault.shouldWarnSilence()，与渲染层的抑制条件共用一份，
+   * 避免两处各写一份后改歪（该函数有单测守着）。
    */
   useEffect(() => {
     const id = setInterval(() => {
-      if (!LISTENING_STATES.includes(mon.sessionState)) {
-        if (silenceWarning) setSilenceWarning(false);
-        return;
-      }
-      const quietFor = Date.now() - lastLoudRef.current;
-      const isQuiet = quietFor >= SILENCE_WARN_MS;
+      const isQuiet = shouldWarnSilence({
+        sessionState: mon.sessionState,
+        quietForMs: Date.now() - lastLoudRef.current,
+        deviceFault: deviceFault !== null,
+      });
       if (isQuiet !== silenceWarning) setSilenceWarning(isQuiet);
     }, 1000);
     return () => clearInterval(id);
-  }, [mon.sessionState, silenceWarning]);
+  }, [mon.sessionState, silenceWarning, deviceFault]);
 
   /** 电平回调：记录最后一次"有声"时刻；声音一恢复立刻解除警告。 */
   const handleLevel = useCallback((l: number) => {
@@ -98,6 +100,19 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
   useEffect(() => () => captureRef.current?.stop(), []);
 
   const active = ["starting", "capturing", "reconnecting", "analyzing"].includes(mon.sessionState);
+
+  /**
+   * 排期信息：只在空闲态显示"下次自动开始"。
+   * 监听中显示它没有意义，反而会让人以为当前会话是自动开的（实际是手点的）。
+   */
+  const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
+  useEffect(() => {
+    window.appApi
+      .getSettings()
+      .then((s) => setSchedule(s.schedule ?? null))
+      .catch(() => setSchedule(null));
+  }, [mon.sessionState]);
+  const nextStart = nextScheduledStart(schedule, new Date(now));
 
   const sessionElapsedMs = useMemo(() => {
     if (!mon.sessionStartedAt) return 0;
@@ -124,12 +139,13 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
 
   async function doStart(source: "microphone" | "systemLoopback") {
     setCaptureError(null);
+    setDeviceFault(null);
     lastLoudRef.current = Date.now();
     let result;
     if (source === "microphone") {
-      result = await startMicCapture(deviceId, handleLevel, handleCaptureEnded);
+      result = await startMicCapture(deviceId, handleLevel, handleCaptureEnded, handleDeviceLost);
     } else {
-      result = await startLoopbackCapture(handleLevel, handleCaptureEnded);
+      result = await startLoopbackCapture(handleLevel, handleCaptureEnded, handleDeviceLost);
     }
     if (!result.ok) {
       setCaptureError(result.error.message);
@@ -145,6 +161,29 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
       captureRef.current = null;
       setLevel(0);
     }
+  }
+
+  /**
+   * 设备级故障（轨道结束 / 被静音超时 / 设备从列表消失）。
+   *
+   * 与 handleCaptureEnded 的区别——这里**不结束会话**。
+   * 无人值守场景下直接结束意味着这一场的转写与报告就此断档，
+   * 用户回到电脑前只看到"已结束"，不知道中途发生过什么。
+   * 保留会话后，用户重选设备 → 点「继续」即可接回同一场，数据不断档。
+   *
+   * 代价是这期间不会有新字幕（采不到音），所以提示必须足够显著，
+   * 绝不能让界面看起来"还在正常录"。
+   */
+  function handleDeviceLost(reason: string) {
+    setDeviceFault({ code: "CAPTURE_DEVICE_LOST", reason });
+    setSilenceWarning(false);
+    // 采集已不可用：停掉句柄并清零电平，避免电平条继续显示旧值骗人
+    captureRef.current?.stop();
+    captureRef.current = null;
+    setLevel(0);
+    // 暂停会话：主进程侧 resume() 只在 paused 下生效，
+    // 这样用户重选设备后能接回同一场，而不是被迫另开新会话。
+    void mon.pauseSession();
   }
 
   // 采集轨道静默死亡（设备拔出/被独占/音频服务重启导致哈希变化）：
@@ -165,6 +204,7 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     captureRef.current = null;
     setLevel(0);
     setSilenceWarning(false);
+    setDeviceFault(null);
     await mon.stopSession();
   }
 
@@ -175,17 +215,19 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
     captureRef.current = null;
     setLevel(0);
     setSilenceWarning(false);
+    setDeviceFault(null);
     await mon.pauseSession();
   }
 
   // 恢复 = 真重开：先重启采集（设备可能已在暂停期间失效），再通知主进程重连 ASR。
   async function doResume() {
     setCaptureError(null);
+    setDeviceFault(null);
     lastLoudRef.current = Date.now();
     setSilenceWarning(false);
     const cap = mon.audio?.source === "systemLoopback"
-      ? await startLoopbackCapture(handleLevel, handleCaptureEnded)
-      : await startMicCapture(deviceId, handleLevel, handleCaptureEnded);
+      ? await startLoopbackCapture(handleLevel, handleCaptureEnded, handleDeviceLost)
+      : await startMicCapture(deviceId, handleLevel, handleCaptureEnded, handleDeviceLost);
     if (!cap.ok) {
       // 采集起不来就别恢复会话——让用户看到原因（设备失效/被占用）
       setCaptureError(cap.error.message);
@@ -239,10 +281,16 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
             <span>音源 <b>{captureRef.current?.sourceLabel ?? (audio?.source === "microphone" ? "麦克风" : audio?.source === "systemLoopback" ? "系统声音" : "—")}</b></span>
           </div>
           <div className="status-actions">
-            {!active && mon.sessionState !== "paused" ? (
+            {/*
+              设备选择下拉：正常空闲态显示；**设备故障态也要显示**——
+              故障后会话转为 paused，若沿用 "!active && state!=='paused'" 的条件，
+              下拉会被一并藏起来，而故障提示恰恰在说"在下方音源下拉里重新选择设备"，
+              等于让用户去找一个不存在的控件。所以故障态单独放行。
+            */}
+            {(!active && mon.sessionState !== "paused") || deviceFault ? (
               <>
                 <select
-                  className="input select"
+                  className={`input select${deviceFault ? " select-fault" : ""}`}
                   value={deviceId ?? ""}
                   onChange={(e) => setDeviceId(e.target.value || null)}
                   disabled={active || actionPending}
@@ -252,12 +300,20 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
                     <option key={d.id} value={d.id}>{d.label}</option>
                   ))}
                 </select>
-                <Button variant="primary" disabled={actionPending} onClick={() => performAction(() => doStart("microphone"))}>开始麦克风监听</Button>
-                <Button disabled={actionPending} onClick={() => performAction(() => doStart("systemLoopback"))}>监听系统声音</Button>
+                {/* 故障态下已有「重选设备后继续」，不再重复给"开始"按钮 */}
+                {!deviceFault ? (
+                  <>
+                    <Button variant="primary" disabled={actionPending} onClick={() => performAction(() => doStart("microphone"))}>开始麦克风监听</Button>
+                    <Button disabled={actionPending} onClick={() => performAction(() => doStart("systemLoopback"))}>监听系统声音</Button>
+                  </>
+                ) : null}
               </>
             ) : null}
+            {/* 设备故障后：会话已是 paused，主按钮变成「重选设备后继续」 */}
             {mon.sessionState === "paused" ? (
-              <Button variant="primary" disabled={actionPending} onClick={() => performAction(doResume)}>继续</Button>
+              <Button variant="primary" disabled={actionPending} onClick={() => performAction(doResume)}>
+                {deviceFault ? "重选设备后继续" : "继续"}
+              </Button>
             ) : null}
             {active ? <Button disabled={actionPending} onClick={() => performAction(doPause)}>暂停</Button> : null}
             {active || mon.sessionState === "paused" ? (
@@ -268,6 +324,22 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
             ) : null}
           </div>
         </div>
+
+        {/*
+          设备级故障提示：与"无声告警"刻意区分——这里绝不说"检查音量/是否静音"
+          （那是内容静音的说法，会把用户引向错误的排查方向）。
+          用 danger 色（无声告警是 warn 色），因为"采不到了"比"暂时没人说话"严重得多。
+        */}
+        {deviceFault ? (
+          <div className="callout callout-danger">
+            <b>[{deviceFault.code}] 音频设备已失效，当前录不到声音。</b>
+            <div style={{ marginTop: 4 }}>{deviceFault.reason}</div>
+            <div style={{ marginTop: 4 }}>
+              处理方式：在下方音源下拉里<b>重新选择设备</b>，然后点「重选设备后继续」接回本场监听。
+              本次会话不会中断，重选设备前的转写与问题都会保留。
+            </div>
+          </div>
+        ) : null}
 
         <div className="meter-row">
           <span className="meter-label">电平</span>
@@ -283,13 +355,47 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
           {audio && audio.queueOverflowCount > 0 ? (
             <span className="chip chip-warn"><span className="chip-k">队列溢出</span>{audio.queueOverflowCount} 次</span>
           ) : null}
+          {/* 只在未开始时显示排期：会话进行中显示会让人误以为当前是自动开的 */}
+          {nextStart && !active && mon.sessionState !== "paused" ? (
+            <span className="chip">
+              <span className="chip-k">下次自动开始</span>
+              {nextStart.toLocaleString()}（{formatCountdown(nextStart, new Date(now))}）
+            </span>
+          ) : null}
+          {/*
+            本场的排期结束时刻：与「下次自动开始」相反，这条只在会话进行中出现。
+            必须显示，否则用户看到会话自己停了会以为是故障——自动结束的可见性
+            是这套机制能否被信任的前提。
+          */}
+          {mon.scheduleStatus?.scheduledEndAtIso && (active || mon.sessionState === "paused") ? (
+            <span className="chip">
+              <span className="chip-k">排期结束</span>
+              {new Date(mon.scheduleStatus.scheduledEndAtIso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              （{formatCountdown(new Date(mon.scheduleStatus.scheduledEndAtIso), new Date(now))}）
+            </span>
+          ) : null}
         </div>
 
-        {captureError ? <div className="callout callout-danger">{captureError}</div> : null}
-        {silenceWarning ? (
+        {/* 排期已启用但「自动开始」未接通，必须让用户看见，而不是等到点没动静才发现 */}
+        {schedule?.enabled && !active && mon.sessionState !== "paused" ? (
           <div className="callout callout-warn">
-            ⚠ 已连续 {SILENCE_WARN_MS / 1000} 秒没有检测到输入声音。请检查：麦克风是否被静音或音量过低、
-            系统声音采集是否选错了共享目标（需要勾选“分享音频”）、播放设备是否正常运行。
+            ⚠ 已配置定时监听，但<b>自动开始尚未接通</b>（系统声音采集需当次手动授权）。
+            到点不会自动录制，请手动点「监听系统声音」。
+            <br />
+            <b>到点自动结束已接通</b>：在排期时段内开始的会话，会在结束时刻自动收尾并提示原因。
+          </div>
+        ) : null}
+
+        {captureError ? <div className="callout callout-danger">{captureError}</div> : null}
+        {/*
+          无声告警：刻意排除 deviceFault —— 设备已判故障时"没声音"是必然结果，
+          再提示"检查音量/是否静音"会把用户引向错误方向（该换设备，不是该调音量）。
+          定时器里已抑制，这里再拦一次作为渲染层双保险。
+        */}
+        {silenceWarning && !deviceFault ? (
+          <div className="callout callout-warn">
+            ⚠ 已连续 {SILENCE_WARN_MS / 1000} 秒没有检测到输入声音。
+            若采集源本身正常，请检查：麦克风是否被静音或音量过低、播放设备是否在正常出声。
             声音恢复后此提示会自动消失。
           </div>
         ) : null}
