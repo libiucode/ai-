@@ -35,6 +35,16 @@ describe("结束原因文案", () => {
     expect(formatEndReason(undefined)).toContain("未记录");
   });
 
+  it("空串也显示「未记录」（?? 兜不住空串，会露出空白）", () => {
+    // 回归点：曾用 `reason ?? "unknown"`，空串漏过去 → 界面显示「结束方式：」后面空白，
+    // 看起来像界面坏了。改用 `||` 后由 unknown 兜底。
+    expect(formatEndReason("" as unknown as SessionEndReason)).toContain("未记录");
+  });
+
+  it("未知取值不露出英文原样，兜到「未记录」", () => {
+    expect(formatEndReason("some-future-reason" as unknown as SessionEndReason)).toContain("未记录");
+  });
+
   it("手动结束与排期自动结束文案可区分", () => {
     expect(formatEndReason("user")).toContain("手动");
     expect(formatEndReason("schedule-window-end")).toContain("自动");

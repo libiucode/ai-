@@ -17,7 +17,13 @@ export const END_REASON_LABEL: Record<SessionEndReason | "unknown", string> = {
   unknown: "未记录（早期会话）",
 };
 
-/** 把可空的 endReason 转成展示文案。 */
+/**
+ * 把可空的 endReason 转成展示文案。
+ *
+ * 注意用 `||` 而不是 `??`：`??` 只兜 null/undefined，**空串会漏过去**，
+ * 界面就会显示成「结束方式：」后面一片空白——比显示"未记录"更像故障。
+ * 数据库里老记录是 NULL（`??` 能兜），但从 IPC/JSON 过来的空串同样要兜住。
+ */
 export function formatEndReason(reason: SessionEndReason | null | undefined): string {
-  return END_REASON_LABEL[reason ?? "unknown"];
+  return END_REASON_LABEL[reason || "unknown"] ?? END_REASON_LABEL.unknown;
 }
