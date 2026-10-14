@@ -383,6 +383,12 @@ export class SessionOrchestrator {
     this.asrStatus = { ...this.asrStatus, state: "closed" };
     this.emit("asr.status", this.asrStatus);
     this.lastEndReason = endReason;
+    // 会话结束必须显式广播「本场已无排期结束时刻」。
+    // 不能让前端靠猜——历史缺陷：前端只在 startSession 里清 scheduleStatus，
+    // 会话自然结束不经过那条路径，于是 chip 会拿上一个会话的旧值显示一个假的结束时刻。
+    // 显式发 null 让「已无排期结束」成为事实，而不是残留值。
+    this.scheduledEndAtMs = null;
+    this.emit("schedule.status", { scheduledEndAtIso: null } satisfies ScheduleStatus);
     // 自动结束必须让用户看见原因：否则他只看到一场「正常结束」的空会话，
     // 无法区分是排期到点、软件故障还是自己忘关（历史事故的成因之一）。
     if (endReason !== "user") {

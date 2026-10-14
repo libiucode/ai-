@@ -299,4 +299,38 @@ describe("按排期窗口结束（零额度，不依赖任何用户手势）", (
     expect(store.getSession(sid)!.end_reason).toBe("user");
     expect(orch.getSnapshot().lastEndReason).toBe("user");
   });
+
+  it("会话结束显式广播「已无排期结束时刻」，不留残留值", async () => {
+    // 历史缺陷：前端只在 startSession 里清 scheduleStatus，会话自然结束不经过那条路径，
+    // 于是下一个（窗口外的）会话会拿旧值显示一个假的结束时刻。
+    // 修法：结束时主进程显式发 scheduledEndAtIso=null，让「已无排期结束」成为事实。
+    const { store, dir } = tempStore();
+    const { orch, events } = makeOrch(store);
+    resources.push({ store, dir, orch });
+    armSchedule(store, 3600);
+    await orch.start({ audioSource: "microphone" });
+    expect(orch.getSnapshot().scheduledEndAtMs).not.toBeNull();
+
+    events.length = 0;
+    await orch.stop();
+
+    expect(orch.getSnapshot().scheduledEndAtMs).toBeNull();
+    const reset = events.filter((e) => e.event === "schedule.status");
+    expect(reset.length).toBeGreaterThan(0);
+    expect((reset.at(-1)!.payload as { scheduledEndAtIso: string | null }).scheduledEndAtIso).toBeNull();
+  });
+
+  it("自动结束后也广播 null（不能只有手动结束才清）", async () => {
+    const { store, dir } = tempStore();
+    const { orch, events } = makeOrch(store);
+    resources.push({ store, dir, orch });
+    armSchedule(store, 3600);
+    await orch.start({ audioSource: "microphone" });
+    const internal = orch as unknown as { scheduledEndAtMs: number | null };
+    internal.scheduledEndAtMs = Date.now() - 1;
+    await vi.waitFor(() => expect(orch.getSnapshot().lastEndReason).toBe("schedule-window-end"), { timeout: 4000 });
+
+    const resets = events.filter((e) => e.event === "schedule.status" && (e.payload as { scheduledEndAtIso: string | null }).scheduledEndAtIso === null);
+    expect(resets.length).toBeGreaterThan(0);
+  });
 });
