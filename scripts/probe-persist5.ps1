@@ -12,6 +12,16 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 . ([scriptblock]::Create([System.IO.File]::ReadAllText("$PWD\scripts\cdp-lib.ps1", [System.Text.Encoding]::UTF8).Replace('$script:CdpPort = 9222', "`$script:CdpPort = $Port")))
 . ([scriptblock]::Create([System.IO.File]::ReadAllText("$PWD\scripts\audio-device.ps1", [System.Text.Encoding]::UTF8)))
+. ([scriptblock]::Create([System.IO.File]::ReadAllText("$PWD\scripts\audio-clock-assert.ps1", [System.Text.Encoding]::UTF8)))
+
+# 启动前静态检查：本脚本不得同时使用两种采集入口
+$risk = Test-DualPipelineRisk -ScriptPath $PSCommandPath
+if ($risk.risk) {
+  Write-Host "!!! 双管线风险：$($risk.reason)"
+  Write-Host "!!! 音频时间轴会快于墙钟，数据不可用。已终止。"
+  exit 4
+}
+Write-Host "静态检查：单一采集入口 ✓"
 
 $s = $null
 for ($a = 0; $a -lt 4; $a++) { try { $s = Connect-CdpPage -UrlPart "index.html" -Port $Port; break } catch { Start-Sleep -Seconds 3 } }
@@ -62,20 +72,24 @@ $null = Invoke-CdpEval $s @'
 })()
 '@ $false 20
 
-# 关键：userGesture:true + 同一次表达式内完成 getDisplayMedia → ScriptProcessor → sendAudioChunk。
-# 这台实例没开手势旁路，所以必须走这条路（b.click() 的后续微任务拿不到手势）。
-Write-Host "=== 2. 建会话 + 起常驻 loopback（单表达式，userGesture:true）==="
-$start = Invoke-CdpEval $s $JS_START_LOOPBACK_LIVE $true 60
-Write-Host "  $($start | ConvertTo-Json -Compress)"
-if (-not $start.ok) { Write-Host "!!! loopback 启动失败"; Close-Cdp $s; exit 3 }
-
-# 通过 UI 建 app 会话（这样 orchestrator.status=active，音频才不会被 ingestAudio 丢掉）
+# ⚠ 双管线事故修复（2026-10-15）：
+#   原实现在这里调 JS_START_LOOPBACK_LIVE（自建 getDisplayMedia + ScriptProcessor，
+#   回调里调 sendAudioChunk），**紧接着又点 app 的「监听系统声音」按钮**——
+#   app 自己的 wireStream 也调 sendAudioChunk。两条管线同时喂主进程，音频被送两遍，
+#   PcmResamplerSlicer 按样本数累加的 nextStartMs 跑到墙钟的 1.27~1.69 倍
+#   （会话 5970a6d6 / d61e4b32 因此不可用）。
+#
+#   现在只用一条：走 app 自己的按钮路径（这也是验收要求的「真实按钮路径」）。
+#   需要观测音频帧时，用 cdp-lib 的 sendAudioChunk 包装探针（只统计不转发），
+#   不要自己再起一条采集管线。
+Write-Host "=== 2. 建会话 + 起常驻 loopback（只走 app 按钮，单管线）==="
 Write-Host "=== 3. 通过 app 按钮建会话（让 status=active）==="
 $null = Invoke-CdpEval $s "(() => { const b = Array.from(document.querySelectorAll('button')).find(x=>x.textContent.trim()==='监听系统声音'); if(b) b.click(); return true; })()" $true 30
 Start-Sleep -Seconds 3
 $sid = Invoke-CdpEval $s "(() => (document.body.innerText.match(/会话\s*([0-9a-zA-Z]+)/)||[])[1] || null)" $false 20
 $chip = Invoke-CdpEval $s "(() => { const c=Array.from(document.querySelectorAll('.chip')).find(x=>/采集/.test(x.textContent)); return c?c.textContent.trim():null; })()" $false 20
 Write-Host "  sessionId=$sid  captureChip=$chip"
+if (-not $sid) { Write-Host "!!! 会话未建起，终止"; Close-Cdp $s; exit 3 }
 
 Write-Host "=== 4. 起播放源 ==="
 $player = Start-Process -FilePath "ffplay" -ArgumentList "-nodisp","-loop","0","-loglevel","quiet","`"$WavPath`"" -PassThru -WindowStyle Hidden
@@ -149,6 +163,21 @@ for ($i = 1; $i -le $ticks; $i++) {
   }
 
   $mem = Get-TreeMem -RootPid $appPid
+
+  # ⚠ 当场断言：音频时间轴增量 vs 墙钟增量（2026-10-15 加）
+  # 双管线事故的教训——事后才发现音频钟跑到墙钟 1.69 倍，两次会话数据作废。
+  # 这里每轮采样都对比一次，比值 > 1.1 立即报警。
+  $clockCheck = $null
+  if ($i % 2 -eq 0) {   # 每 2 轮（默认 20 秒）查一次，避免每次开 Node 进程
+    $tl = Get-AudioTimelineMs
+    if ($tl) {
+      $clockCheck = Test-AudioClockRatio -WallSec $elapsed -AudioMs $tl.audioMs
+      if (-not $clockCheck.ok) {
+        Write-Host "  !!! [音频时钟断言] $($clockCheck.message)"
+      }
+    }
+  }
+
   $rows += [pscustomobject]@{
     sec = [Math]::Round($elapsed,1); i = $i
     chunks = if ($st) { $st.chunks } else { $null }
@@ -163,9 +192,11 @@ for ($i = 1; $i -le $ticks; $i++) {
     memMB = $mem.workingSetMB
     callouts = if ($st) { ($st.callouts -join "|") } else { $null }
     events = if ($st -and $st.events) { ($st.events | ForEach-Object { "$($_.type)@$($_.t)" }) -join "," } else { "" }
+    clockRatio = if ($clockCheck) { $clockCheck.ratio } else { $null }
+    clockOk = if ($clockCheck) { $clockCheck.ok } else { $null }
   }
-  Write-Host ("  [{0,3}s] chunks={1,-5} mean={2,-9} zero={3,-4} finals={4,-3} capture={5,-10} mem={6}MB" -f `
-    $rows[-1].sec, $rows[-1].chunks, $(if($rows[-1].lastMean){"{0:N5}" -f $rows[-1].lastMean}else{"-"}), $rows[-1].zero, $rows[-1].finals, $rows[-1].captureChip, $rows[-1].memMB)
+  Write-Host ("  [{0,3}s] chunks={1,-5} mean={2,-9} zero={3,-4} finals={4,-3} capture={5,-10} mem={6}MB clockRatio={7}" -f `
+    $rows[-1].sec, $rows[-1].chunks, $(if($rows[-1].lastMean){"{0:N5}" -f $rows[-1].lastMean}else{"-"}), $rows[-1].zero, $rows[-1].finals, $rows[-1].captureChip, $rows[-1].memMB, $(if($rows[-1].clockRatio){"{0:N2}" -f $rows[-1].clockRatio}else{"-"}))
 }
 
 Write-Host "=== 6. 收尾 ==="
