@@ -13,6 +13,7 @@ import {
 } from "../ui/basics";
 import { PRIORITY_LABEL } from "./frameworkSchema";
 import { IssueCard } from "./MonitorPage";
+import { formatEndReason } from "./endReason";
 
 export function HistoryPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -157,6 +158,7 @@ function ReportView({ report }: { report: ReportSummary }) {
         <KV k="开始时间" v={new Date(report.session.startedAtIso).toLocaleString()} />
         <KV k="实际监听时长" v={formatClock(report.session.listenedMs)} />
         <KV k="音源" v={report.session.audioSource === "microphone" ? "麦克风" : "系统声音"} />
+        <KV k="结束方式" v={formatEndReason(report.session.endReason)} />
       </Panel>
 
       <Panel title="分析质量与缺口">
