@@ -85,9 +85,30 @@ describe("ASR 断线缺口计数", () => {
     expect(gapCount()).toBe(0);
   });
 
+  it("真实 adapter 的两处 reconnecting emit 都必须带 connectionId（回归）", async () => {
+    // 2026-10-16 修的真 bug：上面所有用例都是**手动桩造** status 事件，自己写了
+    // connectionId，所以它们测的是「桩带 connectionId 时去重对不对」，
+    // 从来没验证 adapter 真的会带。而 adapter 两处 emit 实际都漏了这个字段
+    // → connId 恒为 null → 去重从不生效 → 每次断线被计 2 次（报告数字翻倍）。
+    //
+    // 这条直接读 adapter 源码里两处 emit 的字段，把「必须带 connectionId」钉死。
+    // 不跑真实 WebSocket（零额度、不联网），只做源码契约断言——
+    // 因为要钉的正是「emit 出去的对象里有没有这个键」。
+    const src = fs.readFileSync(path.join(process.cwd(), "src/main/asr/tencentAdapter.ts"), "utf8");
+    // 第一处：ws close 分支（state: shouldRun ? "reconnecting" : "closed"）
+    const closeBranch = src.match(/this\.emit\("status",\s*\{\s*state:\s*this\.shouldRun\s*\?\s*"reconnecting"\s*:\s*"closed",[\s\S]{0,300}?\}\);/);
+    expect(closeBranch, "ws close 分支的 emit 未找到（代码结构变了？）").not.toBeNull();
+    expect(closeBranch![0]).toMatch(/connectionId/);
+    // 第二处：scheduleReconnect
+    const schedBranch = src.match(/this\.emit\("status",\s*\{\s*state:\s*"reconnecting",[\s\S]{0,300}?\}\);/);
+    expect(schedBranch, "scheduleReconnect 的 emit 未找到（代码结构变了？）").not.toBeNull();
+    expect(schedBranch![0]).toMatch(/connectionId/);
+  });
+
   it("connectionId 缺失时不去重（宁可多计也不漏计）", async () => {
-    // adapter 实际必带 connectionId（openNewConnection 一进来就设），这条走不到；
-    // 但它是防御性回归——漏计会让用户低估断线频率，比多计一次更危险。
+    // 防御性回归：漏计会让用户低估断线频率，比多计一次更危险。
+    // 注：原来这行注释写「adapter 实际必带 connectionId…这条走不到」是**错的**——
+    // 2026-10-16 实测两处 emit 都不带，走得到。现在两处已补上（见上一条用例）。
     const { emit, gapCount } = await setup();
     emit("status", { state: "reconnecting", gapDetected: true });
     emit("status", { state: "reconnecting", gapDetected: true, reconnectAttempt: 1 });

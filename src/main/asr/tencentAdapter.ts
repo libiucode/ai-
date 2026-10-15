@@ -232,8 +232,14 @@ export class TencentAsrAdapter implements AsrAdapter {
         // 主动断开/掉线：标记转写缺口。orchestrator 会把这个标记透传给 UI 与
         // SessionSummary.hasGap，让用户知道这段时间没有转写，而不是让旧字幕
         // 冒充最新结果。方案第 16 节验收标准第 6 条要求断线有明确状态。
+        // 必须带 connectionId：orchestrator.recordAsrGap() 靠它做「同一次断线只计一次」的去重。
+        // 本分支与下面的 scheduleReconnect() 各 emit 一次 reconnecting，是同一次断线的两个
+        // 阶段，必须带同一个 connectionId（此处仍是旧连接的 ID，重连时才会重设）。
+        // 不带的话 connId 恒为 null → 去重永不生效 → 每次断线被计 2 倍，
+        // sessions.gap_count 与报告「转写缺口」翻倍，用户高估故障次数。
         this.emit("status", {
           state: this.shouldRun ? "reconnecting" : "closed",
+          connectionId: this.connectionId,
           gapDetected: true,
           closeCode: code,
           closeReason: closeReason || undefined,
@@ -254,6 +260,9 @@ export class TencentAsrAdapter implements AsrAdapter {
     this.reconnectAttempt++;
     this.emit("status", {
       state: "reconnecting",
+      // 与 ws close 分支带同一个 connectionId，让 orchestrator 把这两次 emit
+      // 去重成「一次断线」而不是两次（详见 close 分支的注释）。
+      connectionId: this.connectionId,
       reconnectAttempt: this.reconnectAttempt,
       gapDetected: true,
     });

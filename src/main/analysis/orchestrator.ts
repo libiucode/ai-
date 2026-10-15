@@ -138,10 +138,14 @@ export class SessionOrchestrator {
   private recordAsrGap(st: Partial<AsrStatus>): void {
     if (st.state !== "reconnecting") return;
     const connId = st.connectionId ?? null;
-    // connId 为 null 时**不去重、直接计数**：漏计会让用户低估断线频率，比多计一次更危险。
-    // 实际不可达——adapter 的两处 reconnecting emit（ws close 分支、scheduleReconnect）
-    // 都带 connectionId，而 connectionId 在 openNewConnection() 一进来就设了。
-    // 保留这个分支是防御性的：万一将来 adapter 改了、connectionId 缺失，行为仍偏向多计。
+    // 2026-10-16 修正：上面这段注释原来是错的。它断言「adapter 两处 reconnecting emit
+    // 都带 connectionId，所以 connId 为 null 实际不可达」——实测两处**都不带**，
+    // connId 恒为 null，去重分支从不生效，导致每次断线被计 **2 次**
+    // （close 分支 emit 一次 + scheduleReconnect 再 emit 一次），
+    // sessions.gap_count 与报告「转写缺口」翻倍。
+    // 已修：adapter 两处 emit 补上 connectionId（同一断线带同一个，去重生效）。
+    // 保留这个 null 分支仍是防御性的：万一将来 adapter 又漏了，行为仍偏向多计
+    // （漏计让用户低估断线频率，比多计更危险）。
     if (connId && connId === this.lastGapConnectionId) return;
     // 只在有 connectionId 时记录锚点：null 不是有效的去重锚点，
     // 若两次独立断线都缺 connectionId，用 null 当锚点会把第二次误去重成漏计。
