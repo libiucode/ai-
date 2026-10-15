@@ -41,6 +41,40 @@ const AnalysisResultSchema = z.object({
 });
 export type VerifiedAnalysisResult = z.infer<typeof AnalysisResultSchema>;
 
+/**
+ * 「配额 / 鉴权」类 HTTP 状态码。
+ *
+ * 为什么这些**绝不重试**（2026-10-15，task-7）：
+ *   - 429：供应商限流或配额耗尽——**重试只会更快耗尽剩余额度**，
+ *     这正是「越没钱越烧」，与用户「不想产生多余账单」直接冲突
+ *   - 402：需要付费/余额不足——重试不可能成功
+ *   - 403：鉴权失败或无权访问该模型——重试不可能成功
+ *   - 401：密钥错误或过期——重试不可能成功
+ *
+ * 这些是该**立即呈现给用户**的可操作错误（检查余额 / 更换密钥 / 升级套餐），
+ * 静默重试到预算耗尽会把一个可以一句话说清的问题拖成整场直播无分析结果。
+ *
+ * 防止后人改回：不要把 4xx 一律当 retryable。
+ *
+ * 注：具体分类在下面的 classifyHttpStatus()；此处仅作文档与检索锚点。
+ */
+
+/** 把 HTTP 状态码映射为可操作的错误。返回 null 表示该状态码走默认的「可重试」路径。 */
+function classifyHttpStatus(status: number): { code: string; message: string; retryable: boolean } | null {
+  switch (status) {
+    case 401:
+      return { code: "LLM_AUTH_FAILED", message: "LLM 鉴权失败（HTTP 401）：API Key 无效或已过期。", retryable: false };
+    case 402:
+      return { code: "LLM_PAYMENT_REQUIRED", message: "LLM 账户余额不足（HTTP 402）：请充值后重试。", retryable: false };
+    case 403:
+      return { code: "LLM_FORBIDDEN", message: "LLM 请求被拒绝（HTTP 403）：无权访问该模型或所在区域受限。", retryable: false };
+    case 429:
+      return { code: "LLM_RATE_LIMITED", message: "LLM 供应商限流或配额已耗尽（HTTP 429）：请稍后重试或提高配额。", retryable: false };
+    default:
+      return null;
+  }
+}
+
 export interface LlmAnalysisInput {
   sessionId?: string;
   windowStartMs: number;
@@ -150,8 +184,17 @@ export class LlmClient {
     for (let attempt = 0; ; attempt++) {
       try { text = await this.requestCompletion(messages, config, deadlineMs); break; }
       catch (error) {
-        const code = (error as { code?: string }).code;
-        if (code === "LLM_BUDGET_EXCEEDED" || code === "LLM_TIMEOUT" || attempt >= config.max_retries) throw error;
+        // 重试闸门用**白名单**：只有 makeError 标记 retryable=true 的错误才重试。
+        //
+        // 为什么不用黑名单（早期写法：if code === "BUDGET_EXCEEDED" || "TIMEOUT" || attempt >= max → throw）：
+        // 每加一个不可重试的错误码都必须记得来这里补一条，漏一次就多烧一次预算。
+        // 2026-10-15 task-7：429/401/402/403 就是这个漏洞的受害者——
+        // 它们从没进过黑名单，于是被当成瞬时故障一路重试到预算耗尽。
+        //
+        // 现在 retryable 由产生错误的那一处声明（见 classifyHttpStatus 与 requestCompletion），
+        // 这里只做「宣示可重试才重试」，不可能再漏。
+        const retryable = (error as { retryable?: boolean }).retryable === true;
+        if (!retryable || attempt >= config.max_retries) throw error;
       }
     }
     const schema = createAnalysisResultSchema(input);
@@ -172,12 +215,34 @@ export class LlmClient {
     throw makeError("LLM_BAD_JSON", "LLM 输出修复后仍未通过结构及证据校验", false);
   }
 
+  /**
+   * 发起一次请求并管理额度计入。
+   *
+   * 额度计入规则（2026-10-15 task-7，负责人授权我定，理由如下）：
+   *
+   * **「失败也扣额度」在配额型供应商下是错的**，应按「请求是否真到达供应商」拆分：
+   *
+   * - **不计入**：请求**根本没发出去**或**没拿到任何响应**——网络失败、DNS、
+   *   连接被拒、超时中断。此时用户未获得任何服务，供应商也未消耗算力，
+   *   计入等于让用户为一次没有发生的服务付费。
+   * - **计入**：请求**已到达供应商并拿到了响应**（含 4xx/5xx）。此时供应商
+   *   已经处理/拒绝了这次请求，算力与配额确实被消耗了；429 即便失败也说明
+   *   它在真金白银地占用配额。
+   *
+   * 这样在弱网环境下不会因为一次抖动就白扣预算，而 429/5xx 这类真实消耗仍如实计入。
+   */
   private async requestCompletion(messages: Array<{ role: string; content: string }>, config: LlmConfig, deadlineMs: number): Promise<string> {
     const remainingMs = deadlineMs - Date.now();
-    if (remainingMs <= 0) throw makeError("LLM_TIMEOUT", "LLM 分析超过20秒或配置的更短时限", true);
+    // 到点即终止，且**不可重试**：deadlineMs 是整个分析轮（含重试和修复）的硬上限。
+    // 若这里声明 retryable，重试循环会马上再进来一次、再次 remainingMs<=0——
+    // 每一轮都发不出请求却消耗一次重试，把 max_retries 空转掉。
+    // 2026-10-15 task-7 核实：早期正是 retryable: true。
+    if (remainingMs <= 0) throw makeError("LLM_TIMEOUT", "LLM 分析超过配置的超时上限", false);
     if (this.budgetUsedInternal + 1 > config.budget_limit) throw makeError("LLM_BUDGET_EXCEEDED", "已达到单场LLM请求数预算上限", false);
-    // Reserve before sending, including repairs, failed and timeout requests.
+    // 先占位再发送：避免并发窗口同时发出多个请求、 collectively 超出预算上限。
+    // 若最终请求未到达供应商（见下方 catch），会把这次占位回滚，不计入。
     this.budgetUsedInternal++;
+    let charged = true; // 已占位；请求未送达供应商时置 false 并回滚
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -187,13 +252,33 @@ export class LlmClient {
       }, remainingMs);
     });
     const operation = async () => {
-      const res = await fetch(`${config.base_url.replace(/\/+$/, "")}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.api_key}` },
-        body: JSON.stringify({ model: config.model, messages }),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw makeError("LLM_HTTP_FAILED", `LLM HTTP ${res.status}`, true);
+      let res: Response;
+      try {
+        res = await fetch(`${config.base_url.replace(/\/+$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.api_key}` },
+          body: JSON.stringify({ model: config.model, messages }),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        // fetch 本身抛错 = 请求未送达供应商（网络层失败、连接被拒、被 abort）。
+        // 用户未获得任何服务 → 回滚额度，不计入。
+        //
+        // 注：被 abort（L250 的超时）时请求其实已经发出，供应商**可能**已处理。
+        // 无法确知，按"用户未获得服务"处理（宁少记不多记）——这正是重试闸门
+        // 让超时不再空转的原因：整轮只有一次 in-flight 超时，不会反复回滚。
+        charged = false;
+        throw error;
+      }
+      // 拿到了 HTTP 响应（含 !res.ok）→ 供应商确实处理了 → 额度保持计入。
+      if (!res.ok) {
+        // 429/401/402/403 是「配额或鉴权」类错误：不重试，直接抛可操作错误。
+        // 其余（5xx 等）按可重试处理——它们可能是瞬时故障。
+        // ⚠️ 不要把 4xx 一律当 retryable，尤其 429：重试只会更快耗尽额度。
+        const known = classifyHttpStatus(res.status);
+        if (known) throw makeError(known.code, known.message, known.retryable);
+        throw makeError("LLM_HTTP_FAILED", `LLM HTTP ${res.status}`, true);
+      }
       const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
       const content = data.choices?.[0]?.message?.content;
       if (typeof content !== "string") throw makeError("LLM_EMPTY_RESPONSE", "LLM 返回空内容", true);
@@ -205,7 +290,11 @@ export class LlmClient {
       // Never propagate network exception text that might contain credentials.
       if ((error as { code?: string }).code) throw error;
       throw makeError("LLM_NETWORK_FAILED", "LLM 网络请求失败", true);
-    } finally { if (timer !== undefined) clearTimeout(timer); }
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+      // 请求未送达供应商 → 回滚占位，不把用户没获得的服务计入额度
+      if (!charged && this.budgetUsedInternal > 0) this.budgetUsedInternal--;
+    }
   }
 }
 

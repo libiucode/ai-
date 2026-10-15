@@ -192,6 +192,15 @@ export interface ScriptStepReport {
 /** 报告用：话术步骤覆盖汇总。未配置话术框架时为 null。 */
 export interface ScriptReport {
   frameworkName: string;
+  /**
+   * 这份覆盖统计用的是哪个框架、来源是否可靠。
+   * - `session-bound`：取自本会话记录的 framework_id，准确
+   * - `fallback-unrecorded`：老会话没有 framework_id，回退到默认框架（历史单框架场景大概率正确，但不保证）
+   * - `fallback-deleted`：framework_id 指向的框架已被删除，回退到默认框架（**结论可能完全不对**）
+   */
+  frameworkSource: "session-bound" | "fallback-unrecorded" | "fallback-deleted";
+  /** 降级时的人类可读原因；session-bound 时为 null */
+  frameworkFallbackReason: string | null;
   phases: ScriptPhaseInterval[];
   steps: ScriptStepReport[];
 }

@@ -1,7 +1,7 @@
 import { Store } from "../storage/store";
 import { computeMetrics } from "../analysis/metrics";
 import { computeStepCoverage, replayScriptPhases } from "../analysis/ruleEngine";
-import type { Issue, ReportSummary, ScriptReport, SessionEndReason } from "../../shared/contracts";
+import type { Framework, Issue, ReportSummary, ScriptReport, SessionEndReason } from "../../shared/contracts";
 import { PHASE_LABEL } from "../../shared/contracts";
 
 function rowToIssue(r: Record<string, unknown>): Issue {
@@ -80,14 +80,37 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
     : Date.now();
   const listenedMs = Math.max(0, endedAt - startedAt);
 
-  // 话术步骤覆盖：重放稳态转写还原阶段区间（与实时会话同一台状态机，确定性一致）；
-  // 未配置话术框架时为 null，不虚构数据。
+  // 话术步骤覆盖：重放稳态转写还原阶段区间（与实时会话同一台状态机，确定性一致）。
+  // 框架必须用「本会话实际使用的那个」，不能无脑取列表第一个——否则多框架场景下
+  // 报告会用商品 A 的步骤去算商品 B 的覆盖率，且用户完全看不出来。
   let script: ScriptReport | null = null;
-  const framework = store.listFrameworks()[0] ?? null;
+  const boundFrameworkId = session.framework_id;
+  const defaultFramework = store.listFrameworks()[0] ?? null;
+  let framework: Framework | null = null;
+  let frameworkSource: ScriptReport["frameworkSource"] = "session-bound";
+  let frameworkFallbackReason: string | null = null;
+  if (boundFrameworkId) {
+    const bound = store.getFramework(boundFrameworkId);
+    if (bound) {
+      framework = bound;
+    } else {
+      // 框架已被删除：回退到默认框架，但必须标明——此时的覆盖率结论可能完全不对。
+      framework = defaultFramework;
+      frameworkSource = "fallback-deleted";
+      frameworkFallbackReason = `会话记录的话术框架（${boundFrameworkId}）已被删除，已回退到默认框架「${defaultFramework?.name ?? "无"}」；此时的步骤覆盖结论可能不准确`;
+    }
+  } else if (defaultFramework) {
+    // 老会话没有 framework_id：历史上只有单框架，回退大概率正确，但不保证。
+    framework = defaultFramework;
+    frameworkSource = "fallback-unrecorded";
+    frameworkFallbackReason = "该会话未记录使用的框架（早期版本或未配置），已回退到默认框架；若当时使用的不是默认框架，覆盖结论不准确";
+  }
   if (framework) {
     const phases = replayScriptPhases(segments);
     script = {
       frameworkName: framework.name,
+      frameworkSource,
+      frameworkFallbackReason,
       phases: phases.map((p) => ({ phase: p.phase, startMs: p.startMs, endMs: p.endMs })),
       steps: computeStepCoverage(framework, phases).map((c) => ({
         name: c.step.name,
@@ -216,7 +239,8 @@ function scriptSection(report: ReportSummary): string {
     )
     .join("\n");
   return `<h2>话术步骤覆盖</h2>
-<p class="kv">框架：${esc(s.frameworkName)}</p>
+<p class="kv">框架：${esc(s.frameworkName)}${s.frameworkSource === "session-bound" ? "" : ` <span style="color:#b45309;font-weight:bold;">（${s.frameworkSource === "fallback-deleted" ? "框架已删除，已回退默认框架" : "框架未记录，已回退默认框架"}）</span>`}</p>
+${s.frameworkFallbackReason ? `<div style="border-left:3px solid #b45309;background:#fffbeb;padding:8px 10px;margin:6px 0;font-size:12px;color:#78350f;">⚠ ${esc(s.frameworkFallbackReason)}</div>` : ""}
 <table>
 <thead><tr><th>阶段</th><th>进入</th><th>离开</th><th>停留</th></tr></thead>
 <tbody>${phaseRows}</tbody>

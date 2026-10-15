@@ -111,12 +111,18 @@ export async function verifyRealWindow(options: RealWindowOptions) {
     if (!config && !options.skipLlm) throw new Error("安全LLM环境配置未齐：需DSH_SECRET_LLM_API_KEY及已确认的公开base_url/model；如只验证规则链路请显式加 --skip-llm");
     // 发任何真实请求前先确认目标，避免把密钥发到非锁定端点。
     if (config) assertLockedLlmTarget(config);
-    const session = source.prepare("SELECT * FROM sessions WHERE id=?").get(options.sessionId) as { started_at_iso: string; ended_at_iso: string | null; audio_source: string; device_id: string | null } | undefined;
+    const session = source.prepare("SELECT * FROM sessions WHERE id=?").get(options.sessionId) as { started_at_iso: string; ended_at_iso: string | null; audio_source: string; device_id: string | null; framework_id?: string | null } | undefined;
     if (!session) throw new Error("来源会话不存在");
-    let frameworkRow = (options.frameworkId
-      ? source.prepare("SELECT * FROM frameworks WHERE id=?").get(options.frameworkId)
+    // 框架优先级：显式 --framework-id > 会话绑定的 framework_id > 外部 JSON > 库内第一个。
+    // 与报告侧口径一致：必须用「这场会话实际用的框架」，不能用列表第一个——
+    // 否则多框架来源库里分析用的框架和会话实际用的不是同一个，且报告里看不出来。
+    const explicitFrameworkId = typeof options.frameworkId === "string" && options.frameworkId ? options.frameworkId : null;
+    const boundFrameworkId = explicitFrameworkId ?? (typeof session.framework_id === "string" && session.framework_id ? session.framework_id : null);
+    let frameworkRow = (boundFrameworkId
+      ? source.prepare("SELECT * FROM frameworks WHERE id=?").get(boundFrameworkId)
       : source.prepare("SELECT * FROM frameworks LIMIT 1").get()) as { id: string; name: string; product_facts: string; updated_at: string } | undefined;
     let framework: Framework;
+    let frameworkSource: "explicit" | "session-bound" | "fallback-first" | "external-json" = boundFrameworkId ? (explicitFrameworkId ? "explicit" : "session-bound") : "fallback-first";
     if (frameworkRow) {
       const steps = source.prepare("SELECT id,framework_id AS frameworkId,name,priority,max_wait_ms AS maxWaitMs FROM framework_steps WHERE framework_id=?").all(frameworkRow.id);
       const rules = (source.prepare("SELECT id,framework_id AS frameworkId,step_id AS stepId,rule_type AS ruleType,pattern,enabled FROM framework_rules WHERE framework_id=?").all(frameworkRow.id) as Array<Record<string, unknown>>).map((r) => ({ ...r, enabled: !!r.enabled }));
@@ -125,6 +131,7 @@ export async function verifyRealWindow(options: RealWindowOptions) {
       // 来源库没有框架：从外部 JSON 读，只用于本次隔离分析，不写回来源库。
       const raw = JSON.parse(fs.readFileSync(path.resolve(options.frameworkJsonPath), "utf8")) as { framework?: unknown };
       framework = FrameworkSchema.parse((raw as { framework?: unknown }).framework ?? raw);
+      frameworkSource = "external-json";
     } else {
       throw new Error("来源数据库没有话术框架；请用 --framework-json 提供框架文件，不要往用户数据库写数据");
     }
@@ -191,6 +198,8 @@ export async function verifyRealWindow(options: RealWindowOptions) {
       /** 样本性质与污染边界；引用本报告必须连同该字段一起引用。 */
       sampleBoundary: options.sampleBoundary,
       sourceConfirmation: "由操作人员确认转写来自真实 ASR；该确认不表示内容性质是带货直播，内容性质见 sampleNature",
+      /** 本次分析实际使用的框架及其来源：核对「用的是不是这场会话的框架」。 */
+      frameworkUsed: { id: framework.id, name: framework.name, source: frameworkSource },
       window: { startMs: windowStartMs, endMs: options.windowEndMs },
       model: config?.model ?? null,
       lockedTarget: { base_url: LOCKED_LLM_BASE_URL, model: LOCKED_LLM_MODEL },

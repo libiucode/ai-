@@ -285,10 +285,79 @@ describe("H 单场请求预算", () => {
     await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_BUDGET_EXCEEDED" });
     expect(fetchMock).toHaveBeenCalledTimes(1); expect(c.budgetUsed).toBe(1);
   });
-  it("H2 失败请求和重试均计数，预算0不发送", async () => {
+  it("H2 网络层失败不计入预算（用户未获服务），重试上限由 max_retries 决定", async () => {
+    // 2026-10-15 task-7 变更：早期「失败也扣额度」对配额型供应商是错的。
+    // fetch 直接 reject = 请求未送达供应商 → 回滚占位，不计入。
     const fetchMock = vi.fn().mockRejectedValue(new Error("fixture failure")); vi.stubGlobal("fetch", fetchMock);
-    const c = client(2, 5); await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_BUDGET_EXCEEDED" }); expect(c.budgetUsed).toBe(2); expect(fetchMock).toHaveBeenCalledTimes(2);
-    await expect(client(0).analyze(input())).rejects.toMatchObject({ code: "LLM_BUDGET_EXCEEDED" }); expect(fetchMock).toHaveBeenCalledTimes(2);
+    const c = client(2, 5);
+    await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_NETWORK_FAILED" });
+    expect(c.budgetUsed).toBe(0);                                    // ← 不计入
+    // 预算不再被消耗 → 重试次数由 max_retries 决定（5 次重试 = 6 次发送），而不是被预算截断
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    // 预算 0 时连第一次都不发
+    fetchMock.mockClear();
+    await expect(client(0).analyze(input())).rejects.toMatchObject({ code: "LLM_BUDGET_EXCEEDED" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("H4 拿到响应的失败（5xx）仍计入预算", async () => {
+    // 供应商确实处理了这次请求（算力与配额已消耗），该计入——与网络层失败区分开。
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const c = client(5, 1);
+    await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_HTTP_FAILED", retryable: true });
+    expect(c.budgetUsed).toBe(2);                                    // 首次 + 一次重试
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("H5 429 不重试且计入预算（该轮只发一次）", async () => {
+    // 最严重的一条：429 = 供应商配额耗尽。若重试会"越没钱越烧"，
+    // 与用户「不想产生多余账单」直接冲突。
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const c = client(5, 3);                                          // 允许 3 次重试
+    await expect(c.analyze(input())).rejects.toMatchObject({
+      code: "LLM_RATE_LIMITED",
+      retryable: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);                      // ← 只发一次，绝不重试
+    expect(c.budgetUsed).toBe(1);                                    // 拿到的响应 → 计入
+  });
+
+  it("H6 401/402/403 同样不重试（鉴权/余额/权限）", async () => {
+    const cases: Array<[number, string]> = [[401, "LLM_AUTH_FAILED"], [402, "LLM_PAYMENT_REQUIRED"], [403, "LLM_FORBIDDEN"]];
+    for (const [status, code] of cases) {
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false, status, json: async () => ({}) });
+      vi.stubGlobal("fetch", fetchMock);
+      const c = client(5, 3);
+      await expect(c.analyze(input())).rejects.toMatchObject({ code, retryable: false });
+      expect(fetchMock).toHaveBeenCalledTimes(1);                    // 不重试
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("H7 429 优先于其他带外状态码：retryable 由来源处声明，重试闸门按白名单放行", async () => {
+    // 闸门回归：早期用黑名单（只列 BUDGET_EXCEEDED/TIMEOUT），
+    // 新增的 429 从没进过黑名单 → 被当瞬时故障一路重试到预算耗尽。
+    // 现在只有 retryable===true 才重试，不可能再漏。
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) })
+      .mockResolvedValue(response(JSON.stringify({ issues: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const c = client(5, 3);
+    await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_RATE_LIMITED" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);                       // 第二次本可成功，但不重试
+  });
+
+  it("H8 deadline 到点后不再空转重试", async () => {
+    // 到点（remainingMs<=0）若仍是 retryable，循环会马上再进来一次又立刻超时，
+    // 发不出请求却把 max_retries 空转掉。
+    // 做法：让 fetch 永不 resolve，靠 remainingMs 到点触发超时。
+    const fetchMock = vi.fn(() => new Promise(() => {}));            // 永不 settle
+    vi.stubGlobal("fetch", fetchMock);
+    const c = client(5, 3, 30);                                      // 30ms 上限
+    await expect(c.analyze(input())).rejects.toMatchObject({ code: "LLM_TIMEOUT", retryable: false });
+    // 只有一次 in-flight 超时；到点后不可重试，不会空转
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it("H3 结束再启动会话使用新LLM实例，预算不跨场累积", async () => {
     const { orch } = await startOrch();

@@ -310,6 +310,38 @@ export class Store {
     }));
   }
 
+  /**
+   * 按 id 取单个框架；找不到返回 null。
+   * 报告侧用它读「会话实际使用的框架」，而不是无脑取列表第一个。
+   */
+  getFramework(id: string): Framework | null {
+    const f = this.db.prepare(`SELECT * FROM frameworks WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
+    if (!f) return null;
+    const stepStmt = this.db.prepare(`SELECT * FROM framework_steps WHERE framework_id = ?`);
+    const ruleStmt = this.db.prepare(`SELECT * FROM framework_rules WHERE framework_id = ?`);
+    return {
+      id: f.id as string,
+      name: f.name as string,
+      productFacts: f.product_facts as string,
+      updatedAt: f.updated_at as string,
+      steps: (stepStmt.all(f.id) as Array<Record<string, unknown>>).map((s) => ({
+        id: s.id as string,
+        frameworkId: s.framework_id as string,
+        name: s.name as string,
+        priority: s.priority as number,
+        maxWaitMs: s.max_wait_ms as number,
+      })),
+      rules: (ruleStmt.all(f.id) as Array<Record<string, unknown>>).map((r) => ({
+        id: r.id as string,
+        frameworkId: r.framework_id as string,
+        stepId: (r.step_id as string) ?? null,
+        ruleType: r.rule_type as "bannedWord" | "absolutization" | "unverifiedClaim" | "repetition" | "hotWord",
+        pattern: r.pattern as string,
+        enabled: (r.enabled as number) === 1,
+      })),
+    };
+  }
+
   // ---- analysis runs ----
   insertAnalysisRun(run: { id: string; sessionId: string; windowId: string; status: string; startedAt: string }) {
     this.db
