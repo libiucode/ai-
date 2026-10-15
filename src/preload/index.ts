@@ -59,8 +59,9 @@ const api = {
       }));
     return mics;
   },
-  selectAudioDevice: (id: string) =>
-    ipcRenderer.invoke(IpcChannels.captureSelectDevice, id) as Promise<boolean>,
+  // 原先这里有 selectAudioDevice(id)，转发到主进程 captureSelectDevice——
+  // 那是个空实现（只校验类型、不落库），调用方以为选择被记录了。
+  // 设备选择持久化改走 settingsSave 公开配置通道，三层（IPC / preload / api）已移除。
   subscribeEvents: <K extends keyof AppEvents>(
     event: K,
     listener: EventListener<K>,

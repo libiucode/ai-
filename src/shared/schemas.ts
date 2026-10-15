@@ -185,7 +185,8 @@ export const IpcChannels = {
   sessionDetail: "session.detail",
   sessionDelete: "session.delete",
   captureListDevices: "capture.listDevices",
-  captureSelectDevice: "capture.selectDevice",
+  // captureSelectDevice 曾是空实现（只校验类型不落库），已三层移除。
+  // 设备选择持久化走 settingsSave 的 audioDeviceId 字段。
   captureAudioChunk: "capture.audioChunk",
   captureStatus: "capture.status",
   asrStatus: "asr.status",

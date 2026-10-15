@@ -67,7 +67,8 @@ export interface WindowApi {
   resumeSession(): Promise<void>;
   stopSession(): Promise<void>;
   listAudioDevices(): Promise<AudioDevice[]>;
-  selectAudioDevice(id: string): Promise<boolean>;
+  // 原先有 selectAudioDevice(id) —— 转发到主进程 captureSelectDevice 空实现。
+  // 设备选择持久化走 settingsSave（audioDeviceId 字段），三层已移除。
   subscribeEvents<K extends keyof AppEvents>(
     event: K,
     listener: EventListener<K>,

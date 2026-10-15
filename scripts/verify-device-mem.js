@@ -87,7 +87,8 @@ app.whenReady().then(async () => {
       resumeSession: () => ipcRenderer.invoke("session.resume"),
       stopSession: () => ipcRenderer.invoke("session.stop"),
       listAudioDevices: async () => DEVICES,
-      selectAudioDevice: (id) => ipcRenderer.invoke("capture.selectDevice", id),
+      // selectAudioDevice 的桩已删除：captureSelectDevice 三层死通道已被清掉，
+      // 设备选择改走 settingsSave（app_settings.audioDeviceId）。留着这个桩会误导。
       subscribeEvents: () => () => {},
       listFrameworks: () => ipcRenderer.invoke("framework.list"),
       saveFramework: (f) => ipcRenderer.invoke("framework.save", f),
@@ -131,24 +132,30 @@ app.whenReady().then(async () => {
         optionCount: sel ? sel.options.length : 0,
         optionValues: sel ? Array.from(sel.options).map(o => o.value) : [],
         restoreLog: window.__deviceRestoreLog ?? null,
+        restoreErr: window.__deviceRestoreErr ?? null,
+        effectRunCount: window.__devEffectRun ?? 0,
         selectValue: sel ? sel.value : null,
       };
     })()
   `);
   console.log(`DIAG=${JSON.stringify(diag)}`);
 
-  // 诊断2：区分「effect 没跑」还是「value 绑定坏」——手动 change 一次看能否选中
-  const diag2 = await ev(`
-    (async () => {
-      const sel = document.querySelector("select.input.select");
-      if (!sel) return "no-select";
-      sel.value = "mic-2";
-      sel.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise(r => setTimeout(r, 500));
-      return { valueAfterManualChange: sel.value, text: sel.options[sel.selectedIndex]?.text };
-    })()
-  `);
-  console.log(`DIAG2=${JSON.stringify(diag2)}`);
+  // 诊断2 只在 saved 场景跑（验证 value 绑定通路）。
+  // fallback/restored 场景绝不能跑：手动 change 会触发 onSelectDevice，
+  // 把 deviceFallbackNotice 清掉，污染被测状态（我自己踩过这个坑）。
+  if (scenario === "saved") {
+    const diag2 = await ev(`
+      (async () => {
+        const sel = document.querySelector("select.input.select");
+        if (!sel) return "no-select";
+        sel.value = "";
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise(r => setTimeout(r, 500));
+        return { valueAfterManualChange: sel.value, text: sel.options[sel.selectedIndex]?.text };
+      })()
+    `);
+    console.log(`DIAG2=${JSON.stringify(diag2)}`);
+  }
 
   const readState = async () => {
     const selected = await ev(`
@@ -164,12 +171,16 @@ app.whenReady().then(async () => {
         return c ? c.innerText.trim() : null;
       })()
     `);
-    return { selected, notice };
+    // 诊断：把页面上所有 warn callout 都列出来，避免"文案不匹配"造成误判
+    const allWarns = await ev(`
+      Array.from(document.querySelectorAll(".callout-warn")).map(e => e.innerText.trim().slice(0, 60))
+    `);
+    return { selected, notice, allWarns };
   };
 
   let out;
   if (scenario === "saved") {
-    // 用户主动选一个设备 → 落库
+    // 用户主动选一个设备 → 落库（验证"保存"）
     await ev(`
       (() => {
         const sel = document.querySelector("select.input.select");
@@ -180,15 +191,27 @@ app.whenReady().then(async () => {
       })()
     `);
     await sleep(1200);
-    out = { storedAfterChange: storedSettings.audioDeviceId, ...(await readState()) };
+    const afterPick = { storedAfterPick: storedSettings.audioDeviceId, ...(await readState()) };
+    // 再选「默认麦克风」→ 应清成 null（验证"清除"）
+    await ev(`
+      (() => {
+        const sel = document.querySelector("select.input.select");
+        if (!sel) return "no-select";
+        sel.value = "";
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+        return "changed";
+      })()
+    `);
+    await sleep(1200);
+    const afterClear = { storedAfterClear: storedSettings.audioDeviceId, ...(await readState()) };
+    out = { afterPick, afterClear };
   } else {
     out = await readState();
   }
 
   console.log(`SCENARIO=${scenario}`);
   console.log(`STORED_DEVICE_ID=${JSON.stringify(storedSettings.audioDeviceId)}`);
-  console.log(`SELECTED=${JSON.stringify(out.selected)}`);
-  console.log(`FALLBACK_NOTICE=${JSON.stringify(out.notice)}`);
+  console.log(`RESULT=${JSON.stringify(out)}`);
   console.log("DONE");
   app.exit(0);
 }).catch((e) => { console.log("FAILED:", e.message); app.exit(1); });

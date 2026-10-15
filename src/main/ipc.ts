@@ -157,9 +157,12 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     }
   });
 
-  ipcMain.handle(IpcChannels.captureSelectDevice, async (_e, deviceId: unknown) => {
-    return typeof deviceId === "string";
-  });
+  // 原先这里有一个 captureSelectDevice handler，只 return typeof deviceId === "string"，
+  // 主进程侧没有任何效果——调用方却以为"设备选择被记录了"。
+  // 设备选择持久化改走 settingsSave（公开配置通道，与 App ID / Base URL 同类），
+  // 见 renderer/pages/MonitorPage.tsx 的 onSelectDevice 与 deviceSelection.ts。
+  // 假通道比没有通道更糟：留着会让人以为设备选择有主进程侧记录，重新踩一遍。
+  // 2026-10-15 二轮清理：IPC handler / preload / api 契约三层一并移除。
 
   ipcMain.handle(IpcChannels.frameworkList, async () => store.listFrameworks());
 

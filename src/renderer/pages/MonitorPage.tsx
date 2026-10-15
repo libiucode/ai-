@@ -121,11 +121,6 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
       .getSettings()
       .then((s) => {
         const resolved = resolveStoredDevice(s.audioDeviceId, devices);
-        // 诊断期临时标记（验证后删除）：确认 effect 确实跑到这里
-        (window as unknown as { __deviceRestoreLog?: string[] }).__deviceRestoreLog = [
-          ...((window as unknown as { __deviceRestoreLog?: string[] }).__deviceRestoreLog ?? []),
-          `stored=${JSON.stringify(s.audioDeviceId)} devices=${devices.map((d) => d.id).join(",")} resolved=${JSON.stringify(resolved)}`,
-        ];
         setDeviceId(resolved.deviceId);
         setDeviceFallbackNotice(resolved.fellBack ? resolved.fallbackReason : null);
       })
