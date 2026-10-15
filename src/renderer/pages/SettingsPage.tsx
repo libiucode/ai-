@@ -59,6 +59,10 @@ export function SettingsPage() {
     setFrameworks(fws);
     setLlmBaseUrl(s.llm?.base_url ?? "");
     setLlmModel(s.llm?.model ?? "");
+    // 必须回填已存的 App ID：doSave() 里 `if (asrAppId) {...} else { delete payload.asr }`，
+    // 而 settingsSave 是整键覆盖（不是 patch）。不回填的话，用户只改「分析间隔」再保存，
+    // 就会把库里已存的 App ID 静默抹掉——他明明没碰 ASR 那一栏。
+    setAsrAppId(s.asr?.appId ?? asrInfo?.appId ?? "");
   }
 
   const schedule: ScheduleConfig = settings?.schedule ?? DEFAULT_SCHEDULE;
@@ -82,7 +86,15 @@ export function SettingsPage() {
       delete payload.asr;
     }
     const { api_key: _dropKey, ...restLlm } = { ...payload.llm, base_url: llmBaseUrl, model: llmModel };
-    payload.llm = restLlm;
+    // llm 整体是 optional，但一旦带上了就必须满足 base_url: z.string().url()。
+    // 全新安装（或用户清空 Base URL）时 llmBaseUrl 是 ""，无条件塞进去会让
+    // SettingsSchema 校验失败 → 保存永久失败，界面只说「字段校验未通过」却不指出是哪个字段。
+    // 所以：Base URL 为空就整个不带 llm，让 schema 的 optional 生效。
+    if (restLlm.base_url) {
+      payload.llm = restLlm;
+    } else {
+      delete payload.llm;
+    }
     const ok = await window.appApi.saveSettings(payload);
     setMsg(
       ok

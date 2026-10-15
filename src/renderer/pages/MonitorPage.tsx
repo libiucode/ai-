@@ -539,12 +539,17 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
             />
             <Metric
               label="有效讲话 / 静音"
-              value={
-                audio
-                  ? `${Math.round((sessionElapsedMs * 0) + (mon.finals.length > 0 ? 1 : 0) * 0) || "—"}`
-                  : "—"
-              }
-              hint="精确值见分析窗口与报告"
+              // 这里不显示数字，是因为**实时链路根本没有这个数据**：AudioStatus 只有
+              // state/source/level/queueOverflowCount，AnalysisStatusLike 也只有
+              // running/queued/lastRunId。speechMs/silenceMs 只在分析窗口的
+              // WindowMetrics 里产出，而本面板不接收窗口指标。
+              //
+              // 原实现写了 `${Math.round(elapsed*0 + finals*0) || "—"}`——两项都乘 0，
+              // 恒等于 0，所以这个格子**永远显示「—」**。它不是「还没算出」，是算不出。
+              // 保留一个恒为 0 的表达式只会误导后人以为这里真有计算逻辑，故删掉。
+              // 要显示真实值，得让主进程把窗口指标推到渲染层（属功能新增，不是修 bug）。
+              value="—"
+              hint="实时面板不提供，见分析窗口与报告"
             />
             <Metric label="分析倒计时" value={analysisCountdownSec ? `${analysisCountdownSec}s` : "按间隔触发"} />
           </div>
