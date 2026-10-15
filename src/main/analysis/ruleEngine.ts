@@ -222,10 +222,20 @@ export function matchRules(
  * new opening, product switch, CTA, or manual reset — never just on time.
  */
 
+/**
+ * 阶段触发词。`feed()` 按数组顺序取**第一个**命中的，因此顺序即优先级。
+ *
+ * ⚠ cta 必须排第一，与 `STEP_PHASE_KEYWORDS` 口径一致：
+ * 「下单」「小黄车」「拍链接」特异性最高，而「介绍」「带来」极易与促单同句
+ * （主播正常话术就是介绍完立刻催单）。若 cta 不排第一，同句竞争会判成
+ * productIntro/opening——主播明明在促单，报告却记成产品介绍。
+ */
 const PHASE_TRIGGERS: Array<{ phase: ScriptPhase; re: RegExp }> = [
+  // 「号链接」要求「号」前是数字，且前面不能是「下/上/这/那/哪」等指示词——
+  // 否则「下一号链接哦」这种口语会被误判成促单。
+  { phase: "cta", re: /下单|拍.*链接|点击.*(小黄车|购物车)|(?<![下上这那哪])[一二三四五六七八九十\d]+号链接/ },
   { phase: "opening", re: /开场|新来的|欢迎.*来到|开始直播/ },
   { phase: "productIntro", re: /今天.*(介绍|带来|上架)|换.*(产品|商品)|看一下.*(这款|这个产品)/ },
-  { phase: "cta", re: /下单|拍.*链接|点击.*(小黄车|购物车)|.*号链接/ },
 ];
 
 export class ScriptLoopState {

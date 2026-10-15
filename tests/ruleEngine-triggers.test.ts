@@ -5,18 +5,24 @@ import { ScriptLoopState, matchRules, normalizeDigits } from "../src/main/analys
  * task-8 补测：阶段触发词排序 + 标点打断数字-单位组合。
  *
  * 归因纪律：每条发现标清 规则问题 / 上游识别问题 / 两者皆有。
- * 本文件只**钉住当前实测行为**并给出归因，不擅自改触发词或加正则
- * （改阶段判定会影响话术步骤覆盖，属话术分析范围；加正则有误报代价）。
+ *
+ * 2026-10-15 task-8 收口更新：本文件原先钉住的是**修复前**的实测行为
+ * （cta 排最后 → 同句竞争必输；`.*号链接` 过宽 → 误报）。
+ * 话术分析已按「cta 排第一」修复（与 STEP_PHASE_KEYWORDS 口径统一），
+ * 并把 `.*号链接` 收紧为 `[一二三四五六七八九十\d]+号链接`。
+ * 因此下列断言从「钉住旧行为」改为「钉住修复后的期望行为」——
+ * 这不是放宽测试，是把「已知错误」转成「已知正确」。
  */
 
-describe("阶段触发词排序：先匹配者胜，cta 永远打不赢同句竞争", () => {
+describe("阶段触发词排序：cta 排第一，同句竞争应判 cta", () => {
   /**
-   * 实测：`feed()` 按 PHASE_TRIGGERS 数组顺序取**第一个**命中的，
-   * 而 cta 排在最后。所以一句话里同时含 productIntro 和 cta 关键词时，
-   * 无论 cta 在句首还是句尾，都判成 productIntro。
+   * 修复后实测：`PHASE_TRIGGERS` 里 cta 排第一，所以同句含 productIntro
+   * 与 cta 关键词时判 cta——主播介绍完立刻催单是正常话术，
+   * 报告该记「成交引导」而不是「产品介绍」。
+   *
+   * 归因：**规则问题**（排序），已修。
    */
-  it("cta 与 productIntro 同句：cta 输（无论先后顺序）", () => {
-    // 归因：**规则问题**（排序）。不是 ASR 问题——文本没被改。
+  it("cta 与 productIntro 同句：cta 赢（无论先后顺序）", () => {
     const both = [
       "今天给大家介绍这款产品，大家点击小黄车下单",
       "大家点击小黄车下单，今天给大家介绍这款产品",
@@ -24,42 +30,42 @@ describe("阶段触发词排序：先匹配者胜，cta 永远打不赢同句竞
       "拍一号链接，今天带来新品",
     ];
     for (const text of both) {
-      expect(new ScriptLoopState().feed(text, 0), text).toBe("productIntro");
+      expect(new ScriptLoopState().feed(text, 0), text).toBe("cta");
     }
   });
 
-  it("cta 与 opening 同句：opening 赢（cta 在最后）", () => {
-    const st = new ScriptLoopState();
-    expect(st.feed("开场欢迎来到直播间，点击小黄车", 0)).toBe("opening");
-    expect(new ScriptLoopState().feed("欢迎来到直播间，今天介绍这款面膜，点击小黄车下单", 0)).toBe("opening");
+  it("cta 与 opening 同句：cta 赢", () => {
+    expect(new ScriptLoopState().feed("开场欢迎来到直播间，点击小黄车", 0)).toBe("cta");
+    expect(new ScriptLoopState().feed("欢迎来到直播间，今天介绍这款面膜，点击小黄车下单", 0)).toBe("cta");
   });
 
-  it("cta 单独成句时正常判为 cta", () => {
-    const st = new ScriptLoopState();
-    expect(st.feed("今天给大家介绍这款面膜", 0)).toBe("productIntro");
-    expect(st.feed("大家点击小黄车下单", 1000)).toBe("cta");
+  it("单独成句时各自判对：介绍→productIntro，促单→cta，开场→opening", () => {
+    expect(new ScriptLoopState().feed("今天给大家介绍这款面膜", 0)).toBe("productIntro");
+    expect(new ScriptLoopState().feed("大家点击小黄车下单", 1000)).toBe("cta");
+    expect(new ScriptLoopState().feed("开场欢迎来到直播间", 1000)).toBe("opening");
   });
 });
 
-describe("cta 触发词 `.*号链接` 会误触发（误报）", () => {
+describe("cta 触发词已收紧：「号链接」不再误触发（误报修复）", () => {
   /**
-   * 实测：`/.*号链接/` 的 `.*` 前缀让它匹配**任意位置**的「号链接」，
-   * 含「型号链接」这类与促单无关的短语也判成 cta。
+   * 修复前 `/.*号链接/` 的 `.*` 前缀匹配任意位置的「号链接」，
+   * 连「型号链接不对」都判 cta。已收紧为 `[一二三四五六七八九十\d]+号链接`
+   * ——「号」前必须是数字或中文数字（「3号链接」「一号链接」），
+   * 不靠放宽 `.*` 换召回。
    *
-   * 归因：**规则问题**（模式过宽）。
-   * 误报方向——按「宁可漏一条，也不要报错一条」的纪律，
-   * 本类问题比漏报更该修。但改阶段判定会影响话术步骤覆盖
-   * （属话术分析范围），故**已报负责人，未擅自改**。
+   * 归因：**规则问题**（模式过宽），已修。
    */
-  it("含「号链接」的非促单文本也被判 cta", () => {
-    const falsePositives = ["型号链接不对", "号链接", "这个号链接", "下一号链接哦"];
+  it("含「号链接」的非促单文本不再判 cta", () => {
+    const falsePositives = ["型号链接不对", "号链接", "这个号链接", "下一号链接哦", "上一号链接"];
     for (const text of falsePositives) {
-      expect(new ScriptLoopState().feed(text, 0), text).toBe("cta");
+      expect(new ScriptLoopState().feed(text, 0), text).not.toBe("cta");
     }
   });
 
   it("真实促单文本判 cta 仍正常", () => {
     expect(new ScriptLoopState().feed("这是3号链接", 0)).toBe("cta");
+    expect(new ScriptLoopState().feed("这是一号链接", 0)).toBe("cta");
+    expect(new ScriptLoopState().feed("拍一号链接", 0)).toBe("cta");
     expect(new ScriptLoopState().feed("大家点击小黄车下单", 0)).toBe("cta");
   });
 });
