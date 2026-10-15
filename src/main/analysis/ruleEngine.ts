@@ -9,6 +9,17 @@ export interface RuleHit {
   pattern: string;
   stepId?: string | null;
   matchedText: string;
+  /**
+   * 归一化是否改变了这个命中里的数字。
+   *
+   * true 表示规则命中的数字是「中文数字折叠成阿拉伯数字」之后才匹配上的，
+   * 即原文写的是中文数字（「二十五」）、规则写的是阿拉伯数字（「25」）。
+   * quote 仍是逐字原文，但**规则作者看到的数字与主播说的数字是不同写法**，
+   * 复盘这条命中时需要知道这一点，否则会误以为规则直接匹配了阿拉伯数字。
+   *
+   * 注意这与「数字被截断」是两件事：截断的命中已被丢弃（见 matchRules）。
+   */
+  numeralNormalized?: boolean;
 }
 
 const DEFAULT_ABSOLUTIZATION_PATTERNS = [
@@ -66,12 +77,26 @@ export interface NormalizedText {
   text: string;
   /** map[i] = 规范化文本第 i 个字符对应的原文起始下标；map[text.length] = 原文长度 */
   map: number[];
+  /**
+   * 中文数字「簇」在规范化文本中的区间列表：[start, end)。
+   * 一个簇 = 原文里连续的一段中文数字/单位（如「二十五」→ 归一化为「25」）。
+   *
+   * 为什么需要它：簇外字符（汉字/标点）在归一化前后一对一，map 每条宽度为 1；
+   * 但**簇内字符的 map 全部等于簇的原文起点**（见 normalizeDigits），
+   * 于是「只匹配到簇的一部分」时反查会把整个簇圈进 quote。
+   * 例：规则 `\d小时` 命中归一化文本「保温25小时」里的「5小时」，
+   * quote 变成「二十五小时」——把规则没匹配的「二十」也算进证据。
+   * 命中区间与簇区间只有「完整包含」或「完全不相交」两种合法关系，
+   * 「部分相交」说明规则截断了数字，此时必须如实标注，不能当成干净命中。
+   */
+  clusters: Array<{ start: number; end: number }>;
 }
 
 /** 把中文数字折叠为阿拉伯数字，并保留到原文的字符级索引映射。 */
 export function normalizeDigits(text: string): NormalizedText {
   let out = "";
   const map: number[] = [];
+  const clusters: Array<{ start: number; end: number }> = [];
   let i = 0;
   while (i < text.length) {
     const start = i;
@@ -96,13 +121,15 @@ export function normalizeDigits(text: string): NormalizedText {
     if (sawUnit || section > 0) {
       const digits = String(total + section);
       for (let k = 0; k < digits.length; k++) { out += digits[k]; map.push(start); }
+      // 记录这个数字簇在规范化文本中的区间，供命中反查判断「是否被规则截断」。
+      clusters.push({ start: out.length - digits.length, end: out.length });
     } else {
       out += text.slice(start, i);
       for (let k = start; k < i; k++) map.push(k);
     }
   }
   map.push(text.length);
-  return { text: out, map };
+  return { text: out, map, clusters };
 }
 
 /** 规则侧：把中文数字折叠为阿拉伯数字，使规则与规范化文本可比。 */
@@ -151,7 +178,16 @@ export function matchRules(
     let m: RegExpExecArray | null;
     while ((m = re.exec(normalized.text)) !== null) {
       if (!m[0]) { re.lastIndex++; continue; }
-      const end = Math.min(m.index + m[0].length, normalized.text.length);
+      const mStart = m.index;
+      const end = Math.min(mStart + m[0].length, normalized.text.length);
+      // 数字簇截断守卫：命中区间与任何数字簇只能是「完整包含」或「完全不相交」。
+      // 部分相交意味着规则只匹配了簇的一部分（如 `\d小时` 命中「25小时」的「5小时」），
+      // 此时簇内字符的 map 全等于簇起点，反查会把整个簇圈进 quote，
+      // 于是 quote 里出现规则根本没匹配的文字（「二十五小时」）。
+      // 这条守卫宁可丢一次命中，也不把没匹配的文字当证据报给用户。
+      const truncated = normalized.clusters.some((c) =>
+        (mStart < c.end && end > c.start) && !(mStart <= c.start && end >= c.end));
+      if (truncated) { re.lastIndex += m[0].length; continue; }
       // 用字符级映射把规范化区间还原成原文区间，quote 逐字来自原文。
       const originalStart = normalized.map[m.index];
       const originalEnd = normalized.map[end] ?? text.length;
@@ -164,12 +200,16 @@ export function matchRules(
       const key = `${p.id}|${originalStart}|${originalEnd}`;
       if (seen.has(key)) { re.lastIndex += m[0].length; continue; }
       seen.add(key);
+      // 命中区间完整包含某个数字簇 ⇒ 规则匹配的是折叠后的阿拉伯数字，
+      // 即原文写的是中文数字。如实标注，让复盘知道作者意图与原文写法不同。
+      const numeralNormalized = normalized.clusters.some((c) => mStart <= c.start && end >= c.end);
       hits.push({
         ruleId: p.id,
         ruleType: p.type,
         pattern: p.pattern,
         stepId: p.stepId ?? null,
         matchedText: quote,
+        ...(numeralNormalized ? { numeralNormalized: true } : {}),
       });
       if (m.index === re.lastIndex) re.lastIndex++;
     }
