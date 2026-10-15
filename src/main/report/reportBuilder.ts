@@ -109,11 +109,15 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       endReason: (session.end_reason as SessionEndReason | null) ?? null,
     },
     asr: {
-      // ASR connection/gap events are not persisted yet. Analysis runs cannot
-      // serve as a proxy; null explicitly means unmeasured, never zero.
+      // connectionCount / disconnectCount 仍未持久化：那需要一张连接事件表，
+      // 超出本轮范围，保持 null（未测量），绝不用 0 冒充。
+      //
+      // gapCount 不同——sessions.gap_count 自 v5 迁移起就落库了，
+      // orchestrator 在 ASR 断线重连时累加（以连接为单位、主动结束不计）。
+      // 老库迁移后为 0，表示「确实没有断线缺口」，与「未测量」是两回事。
       connectionCount: null,
       disconnectCount: null,
-      gapCount: null,
+      gapCount: typeof session.gap_count === "number" ? session.gap_count : 0,
     },
     issues: {
       total: issues.length,
@@ -308,8 +312,8 @@ ${sampleBanner(annotation)}
 <h2>问题概览</h2>
 <p class="kv">共 ${report.issues.total} 条：已确认 ${report.issues.confirmed}，需人工核查 ${report.issues.needsReview}。
 分布（严重 ${bySev(report, "critical")} / 警告 ${bySev(report, "warning")} / 提示 ${bySev(report, "info")}）。
-LLM 实际请求次数与失败次数未统计；分析运行 ${report.analysisRuns.total} 次（失败 ${report.analysisRuns.failed}）。
-ASR 连接、断线与转写缺口未统计。转写文本估算 token ${report.llm.estimatedTokens}（不是服务商实际计费量）。</p>
+LLM 实际请求次数与失败次数未统计；分析窗口 ${report.analysisRuns.total} 个，完整分析（规则+语义）${report.analysisRuns.success} 个，失败 ${report.analysisRuns.failed} 个，其余为 skipped（未配置 LLM 仅跑本地规则，或窗口内无稳态转写片段）。**skipped 不计入成功：看到大量 skipped 说明该场未做语义分析，不能表述为「分析成功」。**
+ASR 连接与断线次数未统计。转写缺口已统计：本场 ${report.asr.gapCount ?? 0} 次（口径为 ASR 断线重连次数，以连接为单位，主动结束不计；0 表示确实没有断线，不是未测量）。转写文本估算 token ${report.llm.estimatedTokens}（不是服务商实际计费量）。</p>
 
 <h2>问题时间轴</h2>
 <table>

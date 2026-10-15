@@ -59,6 +59,14 @@ export class SessionOrchestrator {
   /** 同一错误码在会话内只提示一次，避免重复 callout 刷屏。 */
   private notifiedErrorCodes = new Set<string>();
   private lastErrorCode: string | null = null;
+  /**
+   * 高频错误的节流与累计：这类错误按音频帧触发（约 85ms 一次），
+   * 完全去重会让用户不知道溢出了多少次，完全不去重又会刷屏淹没关键提示。
+   * 因此首次立即报、之后按间隔节流，并把累计次数放到状态里供 UI 读取。
+   */
+  private errorThrottle = new Map<string, { count: number; lastEmittedAt: number }>();
+  /** 高频错误节流间隔（毫秒）：首次立即报，之后每 60 秒最多再报一次。 */
+  private static readonly ERROR_THROTTLE_MS = 60000;
   /** 本次会话的排期结束时刻（epoch ms）。null 表示不按排期结束。 */
   private scheduledEndAtMs: number | null = null;
   /** 最近一次结束的原因，供快照与测试读取。 */
@@ -82,6 +90,12 @@ export class SessionOrchestrator {
   private analysisRunning = false;
   private activeAnalysisRunId: string | null = null;
   private analysisQueued = false;
+  /**
+   * 上次因断线记过缺口的 connectionId。
+   * 一次断线会被 emit 两次（ws close 一次 + scheduleReconnect 一次），
+   * 两次都带同一个 connectionId；用这个字段去重，让一次断线只累加一次。
+   */
+  private lastGapConnectionId: string | null = null;
 
   constructor(store: Store) {
     this.store = store;
@@ -95,6 +109,7 @@ export class SessionOrchestrator {
         st.lastError = null;
       }
       this.asrStatus = { ...this.asrStatus, ...st };
+      this.recordAsrGap(st);
       this.emit("asr.status", this.asrStatus);
     });
     this.asr.on("error", (e) => {
@@ -103,6 +118,40 @@ export class SessionOrchestrator {
       this.emit("asr.status", this.asrStatus);
       this.emit("app.error", err);
     });
+  }
+
+  /**
+   * 把 ASR 断线缺口落到会话记录上。
+   *
+   * 计数口径（2026-10-15 与负责人确认）：
+   * - **以连接为单位，不以 emit 次数为单位**。用户关心「没录上」发生几次，
+   *   不是底层 emit 了几次。
+   * - 只有 `state === "reconnecting"` 才算：这是「连接死了、正在重连」的状态；
+   *   `state === "closed"` 是用户主动停止/会话结束，**不是故障**，
+   *   否则每场正常结束的会话都会记一次缺口。
+   * - 去重靠 connectionId：一次断线的两次 emit（close + scheduleReconnect）
+   *   共享同一个 connectionId，只记第一次；下一次断线 openNewConnection()
+   *   会换新 UUID，所以两次独立断线会记 2 次。
+   *
+   * 幂等由 SQL 的 `gap_count = gap_count + 1` 保证，这里只负责「该不该加」。
+   */
+  private recordAsrGap(st: Partial<AsrStatus>): void {
+    if (st.state !== "reconnecting") return;
+    const connId = st.connectionId ?? null;
+    // connId 为 null 时**不去重、直接计数**：漏计会让用户低估断线频率，比多计一次更危险。
+    // 实际不可达——adapter 的两处 reconnecting emit（ws close 分支、scheduleReconnect）
+    // 都带 connectionId，而 connectionId 在 openNewConnection() 一进来就设了。
+    // 保留这个分支是防御性的：万一将来 adapter 改了、connectionId 缺失，行为仍偏向多计。
+    if (connId && connId === this.lastGapConnectionId) return;
+    // 只在有 connectionId 时记录锚点：null 不是有效的去重锚点，
+    // 若两次独立断线都缺 connectionId，用 null 当锚点会把第二次误去重成漏计。
+    if (connId) this.lastGapConnectionId = connId;
+    if (!this.sessionId) return;   // 会话还没建（音频先到、会话后建）时不落库
+    try {
+      this.store.incrementSessionGap(this.sessionId);
+    } catch {
+      // 落库失败不影响采集与转写；缺口计数是复盘辅助，不是关键路径。
+    }
   }
 
   /**
@@ -242,6 +291,8 @@ export class SessionOrchestrator {
     this.asrAudioStartMs = 0;
     this.asrAudioStarted = false;
     this.asrStatus = { state: "idle", connectionId: null, reconnectAttempt: 0, lastPartialMs: 0, gapDetected: false, lastError: null };
+    // 缺口去重状态跟着会话走：上一场的 connectionId 不能影响下一场。
+    this.lastGapConnectionId = null;
     this.audioStatus = { ...this.audioStatus, queueOverflowCount: 0 };
 
     this.store.createSession({
@@ -270,6 +321,7 @@ export class SessionOrchestrator {
     // 不把配置态当运行故障，避免每个窗口重复抛同一条错误刷屏。
     this.llmState = llmCfg ? "configured" : "not_configured";
     this.notifiedErrorCodes = new Set();
+    this.errorThrottle = new Map();
     if (llmCfg) this.llm.configure(llmCfg);
 
     const intervalMs = (config.windowIntervalSec ?? settings.windowIntervalSec ?? 60) * 1000;
@@ -458,7 +510,7 @@ export class SessionOrchestrator {
       const dropped = this.preStartSamples.length - maxBufferedSamples;
       this.preStartSamples.splice(0, dropped);
       this.preStartDroppedSamples += dropped;
-      this.emit("app.error", makeError(
+      this.emitThrottledError(makeError(
         "PRE_START_BUFFER_OVERFLOW",
         "会话启动前音频缓冲已满，丢弃最早样本",
         true,
@@ -492,7 +544,7 @@ export class SessionOrchestrator {
     }
     this.drainPendingPackets();
     if (dropped > 0) {
-      this.emit("app.error", makeError(
+      this.emitThrottledError(makeError(
         "PRE_START_BUFFER_PARTIAL",
         `就绪窗口缓冲超出上限，已丢弃最早 ${dropped} 个采样`,
         true,
@@ -511,7 +563,7 @@ export class SessionOrchestrator {
         queueOverflowCount: this.audioStatus.queueOverflowCount + 1,
       };
       this.emit("capture.status", this.audioStatus);
-      this.emit("app.error", makeError("CAPTURE_QUEUE_OVERFLOW", "音频队列已满，丢弃旧包", true));
+      this.emitThrottledError(makeError("CAPTURE_QUEUE_OVERFLOW", "音频队列已满，丢弃旧包", true));
     }
     // real-time pace: send packets older than now-500ms
     const sendUntil = this.nowMs() - 500;
@@ -612,6 +664,37 @@ export class SessionOrchestrator {
     this.emit("app.error", error);
   }
 
+  /**
+   * 高频错误（按音频帧触发）的节流提示。
+   *
+   * 语义与 emitAnalysisError 不同：溢出是可累积的，用户需要知道**发生了多少次**，
+   * 于是不能只报一次；但每次都报会在几秒内刷满 UI 错误列表，把关键提示挤掉。
+   * 折中：首次立即报，之后按 ERROR_THROTTLE_MS 节流；累计次数写入状态供 UI 读取。
+   *
+   * 返回本次是否真的 emit（供调用方与测试判断）。
+   */
+  private emitThrottledError(error: AppError): boolean {
+    const now = Date.now();
+    const entry = this.errorThrottle.get(error.code);
+    if (!entry) {
+      this.errorThrottle.set(error.code, { count: 1, lastEmittedAt: now });
+      this.lastErrorCode = error.code;
+      this.emit("app.error", error);
+      return true;
+    }
+    entry.count += 1;
+    if (now - entry.lastEmittedAt < SessionOrchestrator.ERROR_THROTTLE_MS) return false;
+    entry.lastEmittedAt = now;
+    this.lastErrorCode = error.code;
+    this.emit("app.error", makeError(error.code, `${error.message}（已发生 ${entry.count} 次）`, Boolean(error.retryable)));
+    return true;
+  }
+
+  /** 高频错误的累计次数；UI 用它显示「已发生 N 次」，避免信息丢失。 */
+  getErrorCount(code: string): number {
+    return this.errorThrottle.get(code)?.count ?? 0;
+  }
+
   /** 推送话术阶段状态：阶段切换即时发，活跃期每秒随 tick 发（刷新停留时长与超时）。 */
   private emitScriptStatus() {
     const overdueNames = new Set(this.scriptState.overdueSteps(this.framework, this.nowMs()));
@@ -641,7 +724,7 @@ export class SessionOrchestrator {
     this.analysisQueued = false;
     const runId = crypto.randomUUID();
     this.activeAnalysisRunId = runId;
-    let runStatus: "success" | "failed" | "timeout" = "success";
+    let runStatus: "success" | "failed" | "timeout" | "skipped" = "success";
     this.store.insertAnalysisRun({
       id: runId,
       sessionId,
@@ -760,10 +843,14 @@ export class SessionOrchestrator {
           this.emitAnalysisError(makeError(appError?.code ?? "ANALYSIS_LLM_FAILED", `LLM 分析失败: ${msg}`, true));
         }
       } else if (segments.length > 0) {
-        // LLM 未配置：跳过语义分析，本地规则问题照常展示（上方已落库）。
-        this.store.finishAnalysisRun(runId, "success", new Date().toISOString(), null);
+        // LLM 未配置：只跑了本地规则，没有做语义分析。
+        // 记 skipped 而不是 success——「没做」不能伪装成「做成功了」。
+        this.store.finishAnalysisRun(runId, "skipped", new Date().toISOString(), "llm-not-configured: 未配置LLM，仅执行本地规则");
+        runStatus = "skipped";
       } else {
-        this.store.finishAnalysisRun(runId, "success", new Date().toISOString(), null);
+        // 窗口内没有任何稳态片段：连本地规则都没跑（循环体不执行）。
+        this.store.finishAnalysisRun(runId, "skipped", new Date().toISOString(), "empty-window: 窗口内无稳态转写片段");
+        runStatus = "skipped";
       }
 
       if (persisted.length > 0) {

@@ -104,6 +104,8 @@ export class Store {
           speaker_id: string | null;
           speaker_name: string | null;
           end_reason: string | null;
+          /** v5 起有；老库迁移后为 0。用可选是因为类型声明要兼容迁移前的库。 */
+          gap_count?: number | null;
         }
       | undefined;
   }
@@ -114,26 +116,56 @@ export class Store {
       .prepare(
         `SELECT s.id, s.started_at_iso, s.ended_at_iso, s.audio_source, s.status,
            s.framework_id, s.speaker_id, s.speaker_name, s.end_reason,
+           s.gap_count,
            (SELECT COUNT(*) FROM transcript_segments t
              WHERE t.session_id = s.id AND t.is_final = 1) AS final_segment_count,
            (SELECT COUNT(*) FROM issues i WHERE i.session_id = s.id) AS issue_count
          FROM sessions s ORDER BY s.started_at_iso DESC`,
       )
       .all() as Array<Record<string, unknown>>;
-    return rows.map((r) => ({
-      id: r.id as string,
-      startedAtIso: r.started_at_iso as string,
-      endedAtIso: (r.ended_at_iso as string) ?? null,
-      audioSource: r.audio_source as "microphone" | "systemLoopback",
-      status: r.status as string,
-      finalSegmentCount: r.final_segment_count as number,
-      issueCount: r.issue_count as number,
-      hasGap: false,
-      frameworkId: (r.framework_id as string) ?? null,
-      speakerId: (r.speaker_id as string) ?? null,
-      speakerName: (r.speaker_name as string) ?? null,
-      endReason: (r.end_reason as SessionEndReason) ?? null,
-    }));
+    return rows.map((r) => {
+      // gap_count 由 orchestrator 在 ASR 断线重连时累加；老库迁移后默认 0。
+      // hasGap 不再硬编码——用户复盘时要能区分「没说话」和「断了没录上」。
+      const gapCount = typeof r.gap_count === "number" ? r.gap_count : 0;
+      return {
+        id: r.id as string,
+        startedAtIso: r.started_at_iso as string,
+        endedAtIso: (r.ended_at_iso as string) ?? null,
+        audioSource: r.audio_source as "microphone" | "systemLoopback",
+        status: r.status as string,
+        finalSegmentCount: r.final_segment_count as number,
+        issueCount: r.issue_count as number,
+        hasGap: gapCount > 0,
+        gapCount,
+        frameworkId: (r.framework_id as string) ?? null,
+        speakerId: (r.speaker_id as string) ?? null,
+        speakerName: (r.speaker_name as string) ?? null,
+        endReason: (r.end_reason as SessionEndReason) ?? null,
+      };
+    });
+  }
+
+  /**
+   * 累加一次 ASR 断线缺口。
+   *
+   * 去重与过滤口径（2026-10-15 定）：
+   * - 只统计「真的断过线」：state === "reconnecting"；用户主动停止
+   *   （state === "closed"）不算缺口——点「结束」不是故障。
+   * - 同一次断线的两次 emit（ws close 一次 + scheduleReconnect 一次）
+   *   只累加一次，由调用方用 connectionId 去重（这里不做查询，避免每次
+   *   都读库）。
+   * - 累加是原子的：`gap_count = gap_count + 1`，并发/重入都安全。
+   *
+   * 返回累加后的值，便于测试断言。
+   */
+  incrementSessionGap(sessionId: string): number {
+    this.db
+      .prepare(`UPDATE sessions SET gap_count = COALESCE(gap_count, 0) + 1 WHERE id = ?`)
+      .run(sessionId);
+    const row = this.db
+      .prepare(`SELECT gap_count FROM sessions WHERE id = ?`)
+      .get(sessionId) as { gap_count: number | null } | undefined;
+    return row?.gap_count ?? 0;
   }
 
   /** Deletes a session and all dependent rows. Returns true if a row was removed. */

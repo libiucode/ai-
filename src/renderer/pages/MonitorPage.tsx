@@ -16,6 +16,7 @@ import {
 } from "../ui/basics";
 import { PRIORITY_LABEL } from "./frameworkSchema";
 import { SILENCE_WARN_MS, shouldWarnSilence } from "./captureFault";
+import { resolveStoredDevice, toStoredDeviceId } from "./deviceSelection";
 import { useMonitorState } from "../hooks/useMonitorState";
 import { startLoopbackCapture, startMicCapture, type CaptureHandle } from "../capture/audioCapture";
 
@@ -53,6 +54,10 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
    * 而无人值守下最容易发生的误判就是"以为只是没人说话"。
    */
   const [deviceFault, setDeviceFault] = useState<{ code: string; reason: string } | null>(null);
+  /** 读回的设备 id 已失效时的回落提示（用户主动选过后清除）。 */
+  const [deviceFallbackNotice, setDeviceFallbackNotice] = useState<string | null>(null);
+  /** 是否已做过一次「读回 + 核对」。防止设备列表变化时反复核对。 */
+  const deviceRestored = useRef(false);
 
   // 1s heartbeat for countdown + duration display
   useEffect(() => {
@@ -96,6 +101,55 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
         .catch(() => setDevices([]));
     }
   }, [mon.sessionState]);
+
+  /**
+   * 读回上次选择的设备（持久化在 app_settings.audioDeviceId）。
+   *
+   * **必须等设备列表枚举完成后再核对**：挂载时 listAudioDevices() 是异步的，
+   * 若此时就读回，devices 为空 → 判据保守走默认 → 用户存的设备被静默丢掉。
+   * 所以这里等 devices.length > 0 才做核对（id 失效要明确告知）。
+   *
+   * 只核对一次：之后用户改选项走 onSelectDevice，不再重复核对。
+   * 若设备列表一直是空的（没授权麦克风），不核对也不报回落——避免误报。
+   */
+  useEffect(() => {
+    if (deviceRestored.current) return;      // 已核对过
+    if (devices.length === 0) return;        // 列表还没到，等
+    deviceRestored.current = true;
+
+    window.appApi
+      .getSettings()
+      .then((s) => {
+        const resolved = resolveStoredDevice(s.audioDeviceId, devices);
+        // 诊断期临时标记（验证后删除）：确认 effect 确实跑到这里
+        (window as unknown as { __deviceRestoreLog?: string[] }).__deviceRestoreLog = [
+          ...((window as unknown as { __deviceRestoreLog?: string[] }).__deviceRestoreLog ?? []),
+          `stored=${JSON.stringify(s.audioDeviceId)} devices=${devices.map((d) => d.id).join(",")} resolved=${JSON.stringify(resolved)}`,
+        ];
+        setDeviceId(resolved.deviceId);
+        setDeviceFallbackNotice(resolved.fellBack ? resolved.fallbackReason : null);
+      })
+      .catch(() => { /* 读不到就用默认，不打扰用户 */ });
+  }, [devices]);
+
+  /**
+   * 用户改设备选项：立即更新本地 state + 落库。
+   *
+   * 落库走既有的 settingsSave（公开配置通道），**不引入新的 IPC 通道**——
+   * captureSelectDevice 是主进程的空实现，改它要动 src/main/ipc.ts，
+   * 那是别人的范围；设备 id 是公开配置而非密钥，放 app_settings 语义一致。
+   */
+  async function onSelectDevice(id: string | null) {
+    const next = toStoredDeviceId(id);
+    setDeviceId(next);
+    setDeviceFallbackNotice(null); // 用户主动选过，回落提示就该消失
+    try {
+      const current = await window.appApi.getSettings();
+      await window.appApi.saveSettings({ ...current, audioDeviceId: next });
+    } catch {
+      // 存不上不阻塞本次选择（本地 state 已生效），下一场仍可用
+    }
+  }
 
   useEffect(() => () => captureRef.current?.stop(), []);
 
@@ -310,7 +364,7 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
                 <select
                   className={`input select${deviceFault ? " select-fault" : ""}`}
                   value={deviceId ?? ""}
-                  onChange={(e) => setDeviceId(e.target.value || null)}
+                  onChange={(e) => void onSelectDevice(e.target.value || null)}
                   disabled={active || actionPending}
                 >
                   <option value="">默认麦克风</option>
@@ -415,6 +469,15 @@ export function MonitorPage({ onOpenHistory }: { onOpenHistory: () => void }) {
         ) : null}
 
         {captureError ? <div className="callout callout-danger">{captureError}</div> : null}
+        {/*
+          读回的设备 id 已失效时的回落提示。
+          与"无声告警"区分：这里说的是"你上次选的设备没了"，不是"没人说话"。
+          warn 色（不是 danger）——因为已经安全回落到默认设备，不影响本次监听，
+          但用户需要知道，否则下次开播可能又采到默认设备而不自知。
+        */}
+        {deviceFallbackNotice ? (
+          <div className="callout callout-warn">⚠ {deviceFallbackNotice}</div>
+        ) : null}
         {/*
           无声告警：刻意排除 deviceFault —— 设备已判故障时"没声音"是必然结果，
           再提示"检查音量/是否静音"会把用户引向错误方向（该换设备，不是该调音量）。

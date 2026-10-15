@@ -90,6 +90,12 @@ export function HistoryPage() {
             <div className="session-meta">
               {s.finalSegmentCount} 条稳态 · {s.issueCount} 条问题 · {s.audioSource === "microphone" ? "麦克风" : "系统声音"}
             </div>
+            {s.hasGap ? (
+              // 断线缺口：让用户一眼看出「这几分钟没录上」不是主播没说话。
+              <div className="session-gap-warn">
+                ⚠ 有转写缺口 ×{s.gapCount ?? 1}（ASR 断线重连，期间未录上）
+              </div>
+            ) : null}
             <div onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" onClick={() => void doDelete(s.id)}>删除</Button>
             </div>
@@ -166,21 +172,31 @@ function ReportView({ report }: { report: ReportSummary }) {
           <KV k="分析运行" v={`${report.analysisRuns.success}/${report.analysisRuns.total} 成功`} />
         </div>
         {/*
-          ASR 连接/断线/缺口与 LLM 请求/失败次数并非来自持久化计数，
-          而是用 analysisRuns 拼出来的近似值——那是把不同口径的数据混在一格里显示，
-          既可能误导用户，也会让导出报告的统计看起来自相矛盾。
-          因此这里改为直接显示"未统计"，并附上一句说明为什么没有，
-          而不是给一个看似精确的数字。
+          ASR 连接/断线次数与 LLM 请求/失败次数仍未持久化（需要连接事件表），
+          保持"未统计"——不用 analysisRuns 拼近似值，也不给看似精确的数字。
+          但「转写缺口」自 v5 起是真实落库的（sessions.gap_count），
+          必须显示实测值：用户复盘时要能区分「主播没说话」和「ASR 断了没录上」。
         */}
         <div style={{ marginTop: 10, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
-          <div>ASR 连接 / 断线 / 转写缺口：未统计</div>
+          <div>
+            ASR 连接 / 断线次数：未统计
+            {report.asr.gapCount > 0
+              ? ` · 转写缺口：${report.asr.gapCount} 次`
+              : " · 转写缺口：无"}
+          </div>
           <div>LLM 请求 / 失败次数：未统计</div>
           <div>
-            这些是 ASR 连接与其底层网络层在本次会话中实时产生的事件，
+            "连接 / 断线次数"是 ASR 连接与底层网络层在本次会话中实时产生的事件，
             没有被持久化落到数据库，所以无法在事后准确回算。
-            "分析运行"一栏统计的是分析环节本身，与上面这些网络事件不是一个口径。
+            "转写缺口"已落库，口径是「断线重连」次数（以连接为单位，主动结束不计）。
           </div>
         </div>
+        {report.asr.gapCount > 0 ? (
+          <div className="callout callout-warn">
+            ⚠ 本场有 {report.asr.gapCount} 次 ASR 断线重连，对应时段的音频未被转写，
+            相关时间点的语速、静默与问题统计可能不完整。
+          </div>
+        ) : null}
         {report.analysisRuns.failed > 0 ? (
           <div className="callout callout-warn">
             ⚠ 有 {report.analysisRuns.failed} 次分析运行失败（LLM 超时或坏 JSON），相应窗口的问题可能缺失。以上统计不含失败窗口。

@@ -313,7 +313,11 @@ describe("问题1：LLM 未配置是配置态不是运行故障", () => {
     // 本地规则问题照常落库并展示，LLM 没配不代表分析线全废
     expect(store.listIssues(sessionId).length).toBeGreaterThan(0);
     expect(events.filter((e) => e.event === "analysis.issues").length).toBeGreaterThan(0);
-    expect(store.analysisRunStats(sessionId)).toEqual({ total: 3, success: 3, failed: 0 });
+    // 口径收窄：未配置 LLM 的窗口记 skipped，不许把「没做语义分析」算成成功
+    expect(store.analysisRunStats(sessionId)).toEqual({ total: 3, success: 0, failed: 0 });
+    const row = store.db.prepare("SELECT status,error_message FROM analysis_runs WHERE session_id=? LIMIT 1").get(sessionId) as { status: string; error_message: string };
+    expect(row.status).toBe("skipped");
+    expect(row.error_message).toContain("llm-not-configured");
   });
 
   it("I2 同一错误码会话内只提示一次，不同错误码可各提示一次", async () => {

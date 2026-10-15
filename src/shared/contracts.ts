@@ -283,7 +283,19 @@ export interface SessionSummary {
   status: string;
   finalSegmentCount: number;
   issueCount: number;
+  /**
+   * 本场是否有过 ASR 断线缺口。让用户复盘时能区分
+   * 「主播那几分钟没说话」和「ASR 断了、那几分钟根本没录上」。
+   * 由 store.listSessionSummaries 从 sessions.gap_count 读出，不再硬编码。
+   */
   hasGap: boolean;
+  /**
+   * 断线缺口次数。以「连接」为单位：一次断线（旧连接死 + 新连接建）计 1 次，
+   * 用户主动结束不计。老库迁移后为 0。
+   * 与 connectionCount/disconnectCount 不同——这两个仍未持久化（null），
+   * gapCount 是实测值，0 表示「确实没断过」。
+   */
+  gapCount: number;
   /** 本场使用的话术框架 id（老记录为 null）。 */
   frameworkId?: string | null;
   /** 主播稳定标识与当次名字快照。 */
@@ -307,7 +319,11 @@ export interface ReportSummary {
   asr: {
     connectionCount: number | null;
     disconnectCount: number | null;
-    gapCount: number | null;
+    /**
+     * 断线缺口次数。v5 起落库，是实测值：0 表示「本场确实没断过」。
+     * 与上面两个字段不同——那两个仍是 null（未持久化）。
+     */
+    gapCount: number;
   };
   issues: {
     total: number;
@@ -407,6 +423,18 @@ export interface Settings {
   paceThreshold?: number;
   silenceThresholdMs?: number;
   schedule?: ScheduleConfig;
+  /**
+   * 上次选择的麦克风 deviceId（公开配置，随 app_settings 落库）。
+   *
+   * 为什么需要：设备选择原本只活在渲染进程的 React state 里，刷新/重启即丢，
+   * 用户每次开播都要重选一次；无人值守场景下更可能采错设备
+   * （选中 VB-CABLE 却回到 Razer 麦克风）。
+   *
+   * 语义：`null` = 用系统默认设备（用户选了「默认麦克风」）。
+   * **不允许空串**：空串在 select 里同样表示"默认"，两种写法并存会让
+   * 「清除已存值」的判断分不清是用户选的默认，还是没选过。
+   */
+  audioDeviceId?: string | null;
 }
 
 export interface StartSessionConfig {

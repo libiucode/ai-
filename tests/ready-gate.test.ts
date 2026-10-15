@@ -197,6 +197,59 @@ describe("多话术框架会话绑定", () => {
     expect(a.speaker_name).not.toBe(b.speaker_name); // 历史快照保留原名
     expect(a.speaker_name).toBe("小明");
   });
+
+  it("高频错误节流：溢出刷屏时 emit 被抑制，但累计次数可从状态读到", () => {
+    const { store } = storeWithTwo();
+    const { orch, events } = makeOrch(store);
+    // 直接调私有节流方法，不 start()：避免 stop() 按 1:1 实时速率 flush 队列拖垮 afterEach。
+    const internals = orch as unknown as { emitThrottledError: (e: unknown) => boolean };
+    const overflowCount = () => events.filter((e) => e.event === "app.error" && (e.payload as { code: string }).code === "CAPTURE_QUEUE_OVERFLOW").length;
+    const before = overflowCount();
+    // 模拟 200 次按帧溢出（约 85ms 一次，几秒内刷屏的场景）
+    for (let i = 0; i < 200; i++) {
+      internals.emitThrottledError({ code: "CAPTURE_QUEUE_OVERFLOW", message: "音频队列已满，丢弃旧包", retryable: true });
+    }
+    // 节流：200 次只 emit 1 条（首次），不会刷屏
+    expect(overflowCount() - before).toBe(1);
+    // 次数不丢失：累计次数可从 orchestrator 读到
+    expect(orch.getErrorCount("CAPTURE_QUEUE_OVERFLOW")).toBe(200);
+    store.close();
+  });
+
+  it("不同错误码各自独立节流，不互相吞掉", () => {
+    const { store } = storeWithTwo();
+    const { orch, events } = makeOrch(store);
+    const internals = orch as unknown as { emitThrottledError: (e: unknown) => boolean };
+    for (let i = 0; i < 50; i++) internals.emitThrottledError({ code: "PRE_START_BUFFER_OVERFLOW", message: "x", retryable: true });
+    for (let i = 0; i < 50; i++) internals.emitThrottledError({ code: "CAPTURE_QUEUE_OVERFLOW", message: "y", retryable: true });
+    expect(orch.getErrorCount("PRE_START_BUFFER_OVERFLOW")).toBe(50);
+    expect(orch.getErrorCount("CAPTURE_QUEUE_OVERFLOW")).toBe(50);
+    const codes = events.filter((e) => e.event === "app.error").map((e) => (e.payload as { code: string }).code);
+    expect(new Set(codes).size).toBe(2);
+    store.close();
+  });
+
+  it("未做语义分析不得记 success：LLM 未配置与空窗口都记 skipped", async () => {
+    for (const name of ["DSH_SECRET_LLM_API_KEY", "DSH_LLM_BASE_URL", "DSH_LLM_MODEL"]) vi.stubEnv(name, "");
+    const { store, dir } = storeWithTwo();
+    const { orch } = makeOrch(store);
+    resources.push({ store, dir, orch });
+    await orch.start({ audioSource: "microphone" } as never);
+    const sid = orch.getSnapshot().sessionId!;
+    store.insertSegment({ id: "seg-skip", sessionId: sid, connectionId: "c1", sourceSeq: 0, startMs: 0, endMs: 5000, text: "模拟片段", isFinal: true, createdAt: new Date().toISOString() });
+    const run = (a: number, b: number) => (orch as unknown as { runAnalysis: (x: number, y: number) => Promise<void> }).runAnalysis(a, b);
+    await run(0, 300000); // 有片段但 LLM 未配置 → skipped
+    const row = store.db.prepare("SELECT status,error_message FROM analysis_runs WHERE session_id=?").get(sid) as { status: string; error_message: string };
+    expect(row.status).toBe("skipped");
+    expect(row.error_message).toContain("llm-not-configured");
+    // 空窗口同样 skipped，且不许计入 success
+    await run(300000, 600000);
+    const row2 = store.db.prepare("SELECT status FROM analysis_runs WHERE session_id=? ORDER BY started_at DESC").get(sid) as { status: string };
+    expect(row2.status).toBe("skipped");
+    const stats = store.analysisRunStats(sid);
+    expect(stats.total).toBe(2);
+    expect(stats.success).toBe(0);
+  });
 });
 
 describe("按排期窗口结束（零额度，不依赖任何用户手势）", () => {

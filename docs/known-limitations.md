@@ -104,7 +104,7 @@
 4. **短会话尾部窗口可能不分析**：会话在调度边界前结束时，最后一个窗口可能未触发，最终字幕仍保存。
 5. **跨片段同一语义问题不合并**：换证据仍属同一语义问题的聚合策略未实现。
 6. **会话自动结束**：现已有「按排期窗口结束」路径，但无人值守的**到点自动开始未接通**；一旦开录而未结束，会持续采集、持续送 ASR、**持续计费**并造成跨场次污染（实测有会话挂 622 分钟）。
-7. **未配置 LLM 时会重复弹 `LLM_NOT_CONFIGURED`**：按 60 秒间隔一小时约 60 条，会淹没真实提示。看到该提示表示未配置密钥，**规则引擎仍在正常工作**，不是产品故障。
+7. **~~未配置 LLM 时会重复弹 `LLM_NOT_CONFIGURED`~~（已解除，2026-10-15）**：原描述为「按 60 秒间隔一小时约 60 条，会淹没真实提示」。解除依据：`runAnalysis` 在 `llmState === "not_configured"` 时**直接跳过 LLM 分支**（`orchestrator.ts` 的 `segments.length > 0 && this.llmState !== "not_configured"` 条件），不再每个窗口都调用 `llm.analyze()`，因此不会再抛出 `LLM_NOT_CONFIGURED`；同时该窗口记 `skipped` 而非 `success`，报告不会把「没做语义分析」算成成功。**同类高频错误（`CAPTURE_QUEUE_OVERFLOW`、`PRE_START_BUFFER_OVERFLOW`、`PRE_START_BUFFER_PARTIAL`，按音频帧约 85ms 一次触发）也已改为节流：首次立即报，之后每 60 秒最多一条，累计次数经 `getErrorCount(code)` 供 UI 读取，次数不丢失。** 回归测试见 `tests/ready-gate.test.ts`「高频错误节流」「不同错误码各自独立节流」「未做语义分析不得记 success」。
 8. **规则命中只是风险候选**：词法规则不能核实商品事实、不能认定违法；LLM 只输出风险提示与人工核查建议。
 9. **`paceThreshold` / `silenceThresholdMs` 有 schema 无 UI 入口**。
 10. **LLM 修复重试计入预算**：一次分析最多计 2 次请求；预算单位是**请求次数**，不是钱或 token。

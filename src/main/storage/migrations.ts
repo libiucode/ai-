@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
  * 没有任何升级路径——老库上新增列不会生效，用户升级后一读新列就直接报错。
  * 下面把「建表」和「升级」分开：建表语句保持幂等作为基线，升级走版本递进的迁移。
  */
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 /** 按需加列。SQLite 的 ALTER TABLE ADD COLUMN 加可空列不需要重建表，成本最低。 */
 function addColumnIfMissing(
@@ -47,6 +47,15 @@ const MIGRATIONS: Array<{ version: number; apply: (db: Database.Database) => voi
     // 自动结束（排期/无音频/残留收尾）必须写明原因，否则事后无法复盘。
     version: 4,
     apply: (db) => addColumnIfMissing(db, "sessions", "end_reason", "TEXT"),
+  },
+  {
+    // v5：ASR 断线缺口次数。gapDetected 早就在 tencentAdapter 里 emit，
+    // 注释也写了「透传给 UI 与 SessionSummary.hasGap」，但下游从没实现：
+    // orchestrator 只放内存、store.ts 硬编码 hasGap=false、HistoryPage 不读。
+    // 后果是复盘时无法区分「主播那几分钟没说话」和「ASR 断了、根本没录上」。
+    // 计数单位为「连接」而不是「emit 次数」——用户关心的是没录上发生几次。
+    version: 5,
+    apply: (db) => addColumnIfMissing(db, "sessions", "gap_count", "INTEGER DEFAULT 0"),
   },
 ];
 

@@ -140,6 +140,11 @@ export const SettingsSchema = z.object({
   paceThreshold: z.number().optional(),
   silenceThresholdMs: z.number().optional(),
   schedule: ScheduleConfigSchema.optional(),
+  /**
+   * 上次选择的麦克风 deviceId。
+   * null = 用系统默认设备（用户主动选了「默认麦克风」）。空串不允许——见 contracts 里的说明。
+   */
+  audioDeviceId: z.string().nullable().default(null),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

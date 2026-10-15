@@ -29,7 +29,10 @@ describe("真实存储时段到报告语速", () => {
       expect(report.metrics.charsPerSpeechMinute).toBe(6);
       expect(report.metrics.charsPerTotalMinute).toBe(3);
       expect(report.analysisRuns.total).toBe(1);
-      expect(report.asr).toEqual({ connectionCount: null, disconnectCount: null, gapCount: null });
+      // gapCount 已落库（v5 sessions.gap_count）：0 = 确实没有断线缺口。
+      // 注意与 connectionCount/disconnectCount 区分——那两个仍未持久化，
+      // 保持 null（未测量），绝不用 0 冒充。
+      expect(report.asr).toEqual({ connectionCount: null, disconnectCount: null, gapCount: 0 });
       expect(report.llm.requestCount).toBeNull();
       expect(report.llm.failedCount).toBeNull();
       const html = buildHtmlReport(report);
