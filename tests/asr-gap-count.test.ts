@@ -85,12 +85,26 @@ describe("ASR 断线缺口计数", () => {
     expect(gapCount()).toBe(0);
   });
 
-  it("connectionId 缺失时不重复计数也不漏计：两次独立断线仍记 2 次", async () => {
+  it("connectionId 缺失时不去重（宁可多计也不漏计）", async () => {
     // adapter 实际必带 connectionId（openNewConnection 一进来就设），这条走不到；
-    // 但它是防御性回归——防止有人把「null 当去重锚点」改回去导致第二次漏计。
+    // 但它是防御性回归——漏计会让用户低估断线频率，比多计一次更危险。
     const { emit, gapCount } = await setup();
     emit("status", { state: "reconnecting", gapDetected: true });
     emit("status", { state: "reconnecting", gapDetected: true, reconnectAttempt: 1 });
+    expect(gapCount()).toBe(2);
+  });
+
+  it("connectionId 缺失后不拿 null 当去重锚点（防御性：旧连接号仍然有效）", async () => {
+    // 不可达路径的钉子：若改成「connId 为 null 时把锚点也清成 null」，
+    // 后面再来一次同一个真实连接的断线就会被误去重成漏计。
+    // 这里先记一次 conn-a 断线，中间插一次无 connectionId 的 emit，
+    // 再一次 conn-a 断线：后一次仍必须被去重掉（同一次断线的第二次 emit）。
+    const { emit, gapCount } = await setup();
+    emit("status", { state: "reconnecting", connectionId: "conn-a", gapDetected: true });
+    expect(gapCount()).toBe(1);
+    emit("status", { state: "reconnecting", gapDetected: true });
+    expect(gapCount()).toBe(2);
+    emit("status", { state: "reconnecting", connectionId: "conn-a", gapDetected: true });
     expect(gapCount()).toBe(2);
   });
 
@@ -126,15 +140,21 @@ describe("ASR 断线缺口计数", () => {
   it("跨会话不串味：新会话的缺口计数从 0 开始", async () => {
     const { orch, store, emit } = await setup();
     emit("status", { state: "reconnecting", connectionId: "conn-a", gapDetected: true });
-    expect(store.listSessionSummaries()[0].gapCount).toBe(1);
+    const first = store.listSessionSummaries();
+    expect(first).toHaveLength(1);
+    expect(first[0].gapCount).toBe(1);
     await orch.stop();
     await orch.start({ audioSource: "microphone" });
     const sessions = store.listSessionSummaries();
     expect(sessions).toHaveLength(2);
-    // 最新一场（索引 0）gap_count 为 0：start() 重置了 lastGapConnectionId，
+    // 不靠时间戳排序取「新会话」——两场可能落在同一毫秒。
+    // 直接按 id 断言：start() 重置了 lastGapConnectionId，
     // 旧连接的 connectionId 不能影响新会话。
-    expect(sessions[0].gapCount).toBe(0);
-    expect(sessions[0].hasGap).toBe(false);
+    const second = sessions.find((s) => s.id !== first[0].id)!;
+    expect(second.gapCount).toBe(0);
+    expect(second.hasGap).toBe(false);
+    // 旧会话的计数也不能被重置。
+    expect(sessions.find((s) => s.id === first[0].id)!.gapCount).toBe(1);
   });
 });
 
