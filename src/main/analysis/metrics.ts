@@ -1,14 +1,51 @@
 import type { TranscriptSegment } from "../../shared/contracts";
 
+/**
+ * 一个分析窗口的客观指标。
+ *
+ * ⚠️ **时间基契约（2026-10-15 定，见 docs/metrics-timebase.md）**
+ *
+ * 本结构里**混用了两条不同的时间轴**，漂移时表现完全不同：
+ *
+ * | 字段 | 时间基 | 音频轴漂移时 |
+ * |---|---|---|
+ * | `totalMs` | **墙钟**（`windowEndMs - windowStartMs`） | ✅ 不受影响 |
+ * | `chineseChars` / `englishWords` | 无时间基（纯计数） | ✅ 不受影响 |
+ * | `speechMs` | **音频轴**（`speech_intervals`） | ⚠️ 失真 |
+ * | `silenceMs` | 音频轴（= `totalMs - speechMs`） | ⚠️ 失真，且**方向相反** |
+ * | `charsPerSpeechMinute` | 字数 / 音频轴的分母 | ⚠️ 失真 |
+ * | `charsPerTotalMinute` | 字数 / **墙钟**分母 | ✅ 不受影响 |
+ * | `longestSilenceMs` | **音频轴** | ⚠️ 失真 |
+ * | `paceChanges` | **墙钟锚**（`transcript_segments`） | ✅ 不受影响 |
+ *
+ * 音频轴 = `PcmResamplerSlicer.nextStartMs`，**本地按样本数累加**，
+ * 在「同一份音频被送两遍」这类异常下会跑到墙钟前面（实测 1.27~1.69 倍，
+ * 见 `docs/audio-clock-anomaly.md`）。
+ *
+ * **不要把 `speechMs` / `longestSilenceMs` 当作精确值对外呈现**——
+ * 它们是「在音频轴可信的前提下」的估计。
+ */
 export interface WindowMetrics {
+  /** 墙钟：分析窗口覆盖的总时长。音频轴漂移时不受影响。 */
   totalMs: number;
+  /**
+   * 音频轴：窗口内有效讲话时长。
+   * ⚠️ 失真风险：`speech_intervals` 时间戳来自本地样本数累加，
+   * 异常时会被放大；且窗口按墙钟裁剪，超出部分被截掉——
+   * 所以漂移时它**不是简单乘一个系数**（实测可涨可跌，见文档 §3）。
+   */
   speechMs: number;
+  /** 音频轴：`totalMs - speechMs`。与 `speechMs` 反向失真。 */
   silenceMs: number;
   chineseChars: number;
   englishWords: number;
+  /** ⚠️ 失真：分母是音频轴的 `speechMs`。 */
   charsPerSpeechMinute: number;
+  /** 安全：分母是墙钟的 `totalMs`。 */
   charsPerTotalMinute: number;
+  /** 安全：分桶用 `transcript_segments.startMs`（墙钟锚）。 */
   paceChanges: Array<{ fromMs: number; toMs: number; delta: number }>;
+  /** ⚠️ 失真：基于音频轴的 `speech_intervals` 间隙。 */
   longestSilenceMs: number;
   maxRepeatSimilarity: number;
   repeatCandidate: { text: string; count: number } | null;
@@ -54,6 +91,10 @@ export function computeMetrics(
   windowEndMs: number,
 ): WindowMetrics {
   const totalMs = Math.max(0, windowEndMs - windowStartMs);
+  // 窗口裁剪：截断到墙钟窗口。
+  // ⚠️ 这里是两条时间轴的交汇点——`speech_intervals` 是音频轴、
+  // 窗口边界是墙钟。音频轴漂移时，越出窗口尾部的讲话区间会被**整段裁掉**，
+  // 所以 `speechMs` 不是随漂移单调放大（实测可涨可跌，见文档 §3）。
   const intervals = speechIntervals
     .map((iv) => ({ startMs: Math.max(iv.startMs, windowStartMs), endMs: Math.min(iv.endMs, windowEndMs) }))
     .filter((iv) => Number.isFinite(iv.startMs) && Number.isFinite(iv.endMs) && iv.endMs > iv.startMs)
@@ -76,7 +117,9 @@ export function computeMetrics(
   const speechMinutes = speechMs / 60000;
   const totalMinutes = totalMs / 60000;
 
-  // pace per bucket
+  // pace 分桶用 `transcript_segments.startMs`：它锚在墙钟
+  // （= `asrAudioStartMs` + 服务端相对时间），不是音频轴。
+  // 音频轴漂移时本字段不受影响——这是本函数里少数「安全」的口径之一。
   const buckets = new Map<number, number>();
   for (const seg of segments) {
     const b = Math.floor(seg.startMs / SEGMENT_SLICE_MS) * SEGMENT_SLICE_MS;
@@ -96,7 +139,11 @@ export function computeMetrics(
     prevRate = rate;
   }
 
-  // silence gaps in the clipped union of VAD intervals
+  // 静默间隙：在裁剪后的 VAD 并集上算。
+  // ⚠️ 全部基于音频轴的 `merged`，而游标起点是墙钟 `windowStartMs`、
+  // 终点是墙钟 `windowEndMs`——又一处两轴交汇。
+  // 实测：讲话被推出窗口尾部时，尾部整段变成「静默」，
+  // `longestSilenceMs` 会被**显著拉长**（极端情形直接等于整个窗口）。
   let longestSilenceMs = 0;
   let cursorMs = windowStartMs;
   for (const iv of merged) {
