@@ -3,7 +3,7 @@
 // 差 0.31 小时必须有出处，不能糊过去。
 const path = require("node:path");
 const fs = require("node:fs");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 const db = new Database(dbPath, { readonly: true });

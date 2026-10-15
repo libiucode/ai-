@@ -13,7 +13,7 @@
 param(
   [string]$LiveUrl = "https://live.douyin.com/295178185857",
   [int]$Seconds = 60,
-  [string]$OutDir = "D:\ai盯播工具\app\evidence"
+  [string]$OutDir = "$PSScriptRoot\..\evidence"
 )
 
 $ErrorActionPreference = "Stop"

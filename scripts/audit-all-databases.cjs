@@ -4,7 +4,7 @@
 // 但不写进主库——这是最可能的差额来源，必须查清而不是猜。
 const path = require("node:path");
 const fs = require("node:fs");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 /** 递归找 live-monitor.db */
 function findDbs(root, out = [], depth = 0) {
@@ -24,7 +24,7 @@ function findDbs(root, out = [], depth = 0) {
 }
 
 const roots = [
-  "D:\\ai盯播工具\\app",
+  path.join(__dirname, ".."),
   path.join(process.env.APPDATA, "ai-live-monitor"),
   process.env.TEMP,
   path.join(process.env.LOCALAPPDATA, "Temp"),

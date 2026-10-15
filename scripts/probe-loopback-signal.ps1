@@ -1,6 +1,6 @@
 param(
   [int]$Seconds = 30,
-  [string]$OutDir = "D:\ai盯播工具\app\evidence",
+  [string]$OutDir = "$PSScriptRoot\..\evidence",
   [string]$Signal = "tone"
 )
 $ErrorActionPreference = "Stop"

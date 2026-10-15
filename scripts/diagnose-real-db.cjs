@@ -2,7 +2,7 @@
 // 背景：usage-reconcile.cjs 实测到本机库 schema_version=1 且无 end_reason 列，
 // 与「迁移框架已实现」不符，必须查清是「从未启动过新版」还是「迁移没生效」。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 const db = new Database(dbPath, { readonly: true });

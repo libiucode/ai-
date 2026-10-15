@@ -4,7 +4,7 @@
 //
 // 用法: electron.exe scripts/analyze-boundary.cjs  （需 ELECTRON_RUN_AS_NODE=1）
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 const db = new Database(dbPath, { readonly: true });

@@ -1,6 +1,6 @@
 param([int]$Port = 9223, [int]$Seconds = 75, [string]$WavPath = "D:\asrbench-audio\merged.wav")
 $ErrorActionPreference = "Stop"
-$libPath = "D:\ai盯播工具\app\scripts\cdp-lib.ps1"
+$libPath = "$PSScriptRoot\..\scripts\cdp-lib.ps1"
 $lib = [System.IO.File]::ReadAllText($libPath, [System.Text.Encoding]::UTF8).Replace('$script:CdpPort = 9222', "`$script:CdpPort = $Port")
 . ([scriptblock]::Create($lib))
 
@@ -78,6 +78,6 @@ $dbg = @{
   ui = $ui
   statusEvents = $status
 }
-$dbg | ConvertTo-Json -Depth 8 | Set-Content -Path "D:\ai盯播工具\app\evidence\lvl1-subtitles-$(Get-Date -Format 'yyyyMMdd-HHmmss').json" -Encoding utf8
+$dbg | ConvertTo-Json -Depth 8 | Set-Content -Path "$PSScriptRoot\..\evidence\lvl1-subtitles-$(Get-Date -Format 'yyyyMMdd-HHmmss').json" -Encoding utf8
 Write-Host "证据已写 evidence\lvl1-subtitles-*.json"
 Close-Cdp $s

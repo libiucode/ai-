@@ -1,5 +1,5 @@
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 const db = new Database(path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db"), { readonly: true });
 const sid = process.argv[2] || "ae6d96d7-662d-4d13-aa53-881e9254d6a5";
 const rows = db.prepare("SELECT source_seq, connection_id, start_ms, end_ms, text, is_final FROM transcript_segments WHERE session_id = ? ORDER BY start_ms ASC").all(sid);

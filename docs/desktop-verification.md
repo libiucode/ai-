@@ -2,7 +2,7 @@
 
 - 验证人：桌面端
 - 验证时间：2026-10-14 21:00 – 23:20
-- 工程：`D:\ai盯播工具\app`（Electron 33.4.11 / React 18 / TS / Vite / better-sqlite3 / ws / zod）
+- 工程：`$PSScriptRoot\..`（Electron 33.4.11 / React 18 / TS / Vite / better-sqlite3 / ws / zod）
 - 平台：Windows x64。macOS 一律标注**未实测**，本周只交付 Windows。
 
 ## 结论速览
@@ -137,7 +137,7 @@
 ```powershell
 # 打包进程自身不带 ELECTRON_RUN_AS_NODE
 $env:ELECTRON_RUN_AS_NODE = $null
-$env:PATH = "D:\ai盯播工具\app\node_modules\7zip-bin\win\x64;" + $env:PATH
+$env:PATH = "$PSScriptRoot\..\node_modules\7zip-bin\win\x64;" + $env:PATH
 $env:ELECTRON_BUILDER_NSIS_DIR = "$env:LOCALAPPDATA\electron-builder\Cache\nsis\nsis-3.0.4.1"
 $env:ELECTRON_BUILDER_OFFLINE = "true"
 npm run package
@@ -145,7 +145,7 @@ npm run package
 
 - `npm run package` → **exit 0**
 - 打包耗时：**166.4 秒**（含 `prepackage`：typecheck → build → native 只读闸门）
-- 输出目录：`D:\ai盯播工具\app\release-verify\`
+- 输出目录：`$PSScriptRoot\..\release-verify\`
 
 **产物**：
 
@@ -181,7 +181,7 @@ npm run package
 
 ### I. 安装与启动验证
 
-- 安装位置：`D:\ai盯播工具\app\release-verify\win-unpacked`（**不在开发目录内**，直接双击 `AI盯播工具.exe`）
+- 安装位置：`$PSScriptRoot\..\release-verify\win-unpacked`（**不在开发目录内**，直接双击 `AI盯播工具.exe`）
 - 裸启动（不继承任何 DSH 凭证环境）：进程存活，主窗口标题 **「AI 盯播工具」**，内存约 100 MB，`Responding=True`
 - 数据库：首次启动在 `%APPDATA%\ai-live-monitor\live-monitor.db` 创建
 - 四页切换：全部渲染成功，无白屏、无"加载中"卡死

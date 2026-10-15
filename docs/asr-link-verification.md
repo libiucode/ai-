@@ -60,7 +60,7 @@
 | 项 | 值 |
 |---|---|
 | 机器 | Windows（WLAN 在线，有线网卡 Disconnected） |
-| app | `D:\ai盯播工具\app`，typecheck/build 通过 |
+| app | `$PSScriptRoot\..`，typecheck/build 通过 |
 | 启动 | `$env:ELECTRON_RUN_AS_NODE=$null; npx electron . --no-sandbox` |
 | 我的实例 | PID 39300，CDP 端口 9333，独立 userData `.verify-tmp\myrun-9333` |
 | 本机默认播放设备 | **CABLE Input (VB-Audio Virtual Cable)** |
@@ -423,8 +423,8 @@ e2eMs: { mean: 1516, p50: 1589, p90: 2635, p95: 2635, max: 2635 }
 `scripts/asr-bench/level2-live.js`（实用版）：ffplay 播公开 m3u8 → 系统 loopback → ASR，全程自动。
 
 ```powershell
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\level2-live.js" 9225 120 `
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\level2-live.js" 9225 120 `
   "CCTV-1 (720p)" "http://74.91.26.218:82/live/cctv1hd.m3u8"
 # 参数：CDP 端口，观测秒数，源名称，源 URL
 ```
@@ -1039,8 +1039,8 @@ RSS +8MB、句柄 +57，在 107MB / 864 处走平。
 
 观测命令：
 ```powershell
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\watch-resources.js" <PID> 120
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\watch-resources.js" <PID> 120
 ```
 
 ---
@@ -1163,8 +1163,8 @@ this.emit("status", {
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\node_modules\vitest\vitest.mjs" run
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\node_modules\vitest\vitest.mjs" run
 ```
 
 ASR 相关三项：
@@ -1363,40 +1363,40 @@ WHERE session_id = '190ba540-...' AND is_final = 1 ORDER BY start_ms;
 ### 13.1 生成测试音
 
 ```powershell
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\gen.js"
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\gen.js"
 ```
 
 ### 13.2 WebSocket 层压测（含断线复连）
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\direct-probe2.js" 180 90
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\direct-probe2.js" 180 90
 # 参数：运行秒数，在第几秒主动断线复连
 ```
 
 ### 13.3 app 内链路驱动
 
 ```powershell
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\loopback-drive.js" 9333 30
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\loopback-drive.js" 9333 30
 # 参数：CDP 端口，观测秒数
 ```
 
 ### 13.4 SQLite 核对
 
 ```powershell
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\asr-bench\check-db.js"
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\asr-bench\check-db.js"
 ```
 
 ### 13.5 ASR 单测
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\node_modules\vitest\vitest.mjs" run tests/asr.test.ts tests/asr-lifecycle.test.ts tests/asr-session-boundaries.test.ts
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\node_modules\vitest\vitest.mjs" run tests/asr.test.ts tests/asr-lifecycle.test.ts tests/asr-session-boundaries.test.ts
 ```
 
 ---

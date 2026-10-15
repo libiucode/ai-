@@ -2,9 +2,9 @@
 # 故直接调用 node_modules\.bin\electron.cmd 或 electron.exe 全路径。
 $ErrorActionPreference = "Stop"
 $env:ELECTRON_RUN_AS_NODE = $null
-$exe = "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe"
-$appDir = "D:\ai盯播工具\app"
-$log = "D:\ai盯播工具\app\logs-electron.txt"
+$exe = "$PSScriptRoot\..\node_modules\electron\dist\electron.exe"
+$appDir = "$PSScriptRoot\.."
+$log = "$PSScriptRoot\..\logs-electron.txt"
 Set-Content -Path $log -Value ""
 $p = Start-Process -FilePath $exe -ArgumentList $appDir, "--no-sandbox", "--remote-debugging-port=9222" -WorkingDirectory $appDir -RedirectStandardOutput $log -RedirectStandardError "$log.err" -PassThru
 Write-Output "PID=$($p.Id)"

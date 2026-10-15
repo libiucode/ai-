@@ -1,7 +1,7 @@
 const path = "D:\\ai盯播工具\\app\\scripts\\probe-diag.cjs";
 const r = require("node:child_process").spawnSync(process.execPath, [path], {
   encoding: "utf8",
-  cwd: "D:\\ai盯播工具\\app",
+  cwd: path.join(__dirname, ".."),
 });
 console.log("STATUS:", r.status);
 console.log("SIGNAL:", r.signal);

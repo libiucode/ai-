@@ -3,7 +3,7 @@
 // 成因假设：切片器按「输出样本数/16000」推进时间戳，但 48kHz 设备的真实输入
 // 采样数与之存在偏移；若某次 push 的输入样本数与时间不同步累积，音频时钟会漂移。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const db = new Database(path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db"), { readonly: true });
 

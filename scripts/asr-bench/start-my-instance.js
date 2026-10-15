@@ -14,7 +14,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 const PORT = Number(process.argv[2] || "9444");
-const APP = "D:\\ai盯播工具\\app";
+const APP = path.join(__dirname, "..");
 const USER_DATA = path.join(APP, ".verify-tmp", `myrun-${PORT}`);
 const EXE = path.join(APP, "node_modules", "electron", "dist", "electron.exe");
 

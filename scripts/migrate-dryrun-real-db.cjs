@@ -28,7 +28,7 @@ console.log("副本大小:", fs.statSync(copyDb).size, "bytes\n");
 // 用编译后的 Store 跑迁移（ts 源不能直接 require，走 electron 内置 node + tsx 不现实；
 // 这里直接用 sqlite3 CLI 语义等价地手动执行迁移，再对比数据）。
 // 更可靠的做法：调用 dist 里编译后的 store。若 dist 不存在则明确报错，不假装通过。
-const distStore = path.join("D:\\ai盯播工具\\app", "dist", "main", "main", "storage", "store.js");
+const distStore = path.join(__dirname, "..", "dist", "main", "main", "storage", "store.js");
 if (!fs.existsSync(distStore)) {
   console.log("⚠ dist/main/main/storage/store.js 不存在，无法用真实 Store 跑迁移。");
   console.log("  请先 npm run build。本脚本不会用「手写 SQL 等价替代」冒充验证。");

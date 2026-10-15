@@ -1,7 +1,7 @@
 param(
   [int]$Minutes = 10,
   [string]$DeviceId = "",
-  [string]$OutDir = "D:\ai盯播工具\app\evidence",
+  [string]$OutDir = "$PSScriptRoot\..\evidence",
   [switch]$UseVB
 )
 $ErrorActionPreference = "Stop"

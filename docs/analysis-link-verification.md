@@ -1,6 +1,6 @@
 # 话术分析与 LLM 链路验证（P1-1）
 
-负责人：话术分析；汇报对象：盯播负责人。工程：`D:\ai盯播工具\app`。
+负责人：话术分析；汇报对象：盯播负责人。工程：`$PSScriptRoot\..`。
 
 验证时间：2026-10-14 至 2026-10-15，Asia/Shanghai。**当前基线：HEAD `0d7b9f6`（branch `fix/real-asr-lvl1`），全量 22 文件 252 项通过，双端 typecheck exit 0。** 本节及以下所有实测证据采集于提交前基线 `4b5ff1d`（当时 20 文件 213 项通过）——**证据对应 4b5ff1d 是事实，不改证据，仅标注当前 HEAD**。运行环境：Windows / Electron 内置 Node / Vitest 2.1.9。
 
@@ -49,16 +49,16 @@
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\node_modules\vitest\vitest.mjs" run
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\node_modules\vitest\vitest.mjs" run
 ```
 
 专项：
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\node_modules\vitest\vitest.mjs" run tests/analysis-link-verify.test.ts
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\node_modules\vitest\vitest.mjs" run tests/analysis-link-verify.test.ts
 ```
 
 类型检查和构建：
@@ -425,14 +425,14 @@ G2 首窗卡住时最多保留最新一个等待窗，并精确计算被替换�
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = "1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\dist\main\main\analysis\verifyRealWindow.js" `
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\dist\main\main\analysis\verifyRealWindow.js" `
   --db "<真实ASR来源数据库绝对路径>" `
   --session "<真实会话ID>" `
   --end-ms <冻结窗口终点毫秒> `
   --source-label "<录播来源或现场讲话来源说明>" `
   --confirm-real-asr `
-  --output "D:\ai盯播工具\app\docs\real-window-verification.json"
+  --output "$PSScriptRoot\..\docs\real-window-verification.json"
 ```
 
 如果来源库包含多个框架，追加 `--framework-id <实际框架ID>`。LLM密钥由安全环境注入 `DSH_SECRET_LLM_API_KEY`，不可放进命令行；公开端点和模型由已确认的环境或公开设置提供。

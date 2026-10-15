@@ -6,7 +6,7 @@
 
 - 负责人：音频采集
 - 日期：2026-10-14（21:00–23:10 实测）
-- 工程：`D:\ai盯播工具\app`
+- 工程：`$PSScriptRoot\..`
 - 平台：Windows 10 / Electron 33.4.11 / Chrome 130.0.6723.191
 - **macOS 相关一律标注「未实测」，本周只验 Windows**
 - 改动范围：只动 `src/main/capture/`、`src/renderer/capture/`；未碰 `analysis/`、`asr/`、`report/`、`storage/`
@@ -309,8 +309,8 @@ node scripts/probe-queue.cjs
 
 # SQLite 一致性（Electron 内置 Node，ABI 130 匹配）
 $env:ELECTRON_RUN_AS_NODE="1"
-& "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe" `
-  "D:\ai盯播工具\app\scripts\read-db.cjs"
+& "$PSScriptRoot\..\node_modules\electron\dist\electron.exe" `
+  "$PSScriptRoot\..\scripts\read-db.cjs"
 ```
 
 ### 已废弃、不得再据此出结论的脚本

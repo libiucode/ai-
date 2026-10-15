@@ -198,10 +198,10 @@
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE="1"
-$exe = "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe"
-& $exe "D:\ai盯播工具\app\scripts\analyze-silence.cjs"          # 静默分布
-& $exe "D:\ai盯播工具\app\scripts\analyze-boundary.cjs"          # 污染边界复核
-& $exe "D:\ai盯播工具\app\scripts\analyze-session-profiles.cjs"  # 全库音源画像
+$exe = "$PSScriptRoot\..\node_modules\electron\dist\electron.exe"
+& $exe "$PSScriptRoot\..\scripts\analyze-silence.cjs"          # 静默分布
+& $exe "$PSScriptRoot\..\scripts\analyze-boundary.cjs"          # 污染边界复核
+& $exe "$PSScriptRoot\..\scripts\analyze-session-profiles.cjs"  # 全库音源画像
 ```
 
 三个脚本均只读打开数据库，**不写任何业务数据、不触发任何 ASR 调用**（`analyze-session-profiles.cjs` 只写 `evidence/session-profiles.json` 这一个证据文件）。

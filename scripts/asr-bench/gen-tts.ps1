@@ -2,9 +2,9 @@
 # Windows 内置中文 TTS（Microsoft Huihui）合成，16kHz 单声道 16bit PCM WAV。
 # 用途：ASR 真实音频联调音源。参数：args[0]=输出目录，args[1]=脚本文本文件。
 $OutDir = $args[0]
-if (-not $OutDir) { $OutDir = "D:\ai盯播工具\app\scripts\asr-bench\audio" }
+if (-not $OutDir) { $OutDir = "$PSScriptRoot\..\scripts\asr-bench\audio" }
 $ScriptFile = $args[1]
-if (-not $ScriptFile) { $ScriptFile = "D:\ai盯播工具\app\scripts\asr-bench\live-scripts.txt" }
+if (-not $ScriptFile) { $ScriptFile = "$PSScriptRoot\..\scripts\asr-bench\live-scripts.txt" }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 if (-not (Test-Path -LiteralPath $ScriptFile)) { throw ("scripts not found: " + $ScriptFile) }

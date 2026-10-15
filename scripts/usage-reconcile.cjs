@@ -13,7 +13,7 @@
 // 用法: electron.exe scripts/usage-reconcile.cjs   （需 ELECTRON_RUN_AS_NODE=1）
 const path = require("node:path");
 const fs = require("node:fs");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 const db = new Database(dbPath, { readonly: true });
@@ -113,7 +113,7 @@ console.log("  4. 本表的「有音频」列取自 speech_intervals，而该时
 console.log("     快于墙钟（见 docs/audio-clock-anomaly.md）。因此它只作下界参考，");
 console.log("     **计费基准请以「墙钟时长」上界为准**。");
 
-const outPath = path.join("D:\\ai盯播工具\\app", "evidence", "usage-reconcile.json");
+const outPath = path.join(__dirname, "..", "evidence", "usage-reconcile.json");
 fs.writeFileSync(outPath, JSON.stringify({
   generatedAt: new Date().toISOString(),
   pricePerHour: PRICE_PER_HOUR,

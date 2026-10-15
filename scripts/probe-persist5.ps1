@@ -4,7 +4,7 @@ param(
   [int]$IntervalSec = 10,
   [int]$SwitchAtSec = 0,
   [string]$SwitchToName = "",
-  [string]$OutDir = "D:\ai盯播工具\app\evidence",
+  [string]$OutDir = "$PSScriptRoot\..\evidence",
   [string]$WavPath = "D:\asrbench-audio\merged.wav"
 )
 $ErrorActionPreference = "Stop"

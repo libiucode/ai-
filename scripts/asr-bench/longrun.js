@@ -353,7 +353,7 @@ async function main() {
   const report = {
     kind: "30分钟长跑（真实在播直播流）",
     measuredAtIso: new Date().toISOString(),
-    headCommit: (() => { try { return execSync('git -C "D:\\ai盯播工具\\app" rev-parse --short HEAD', { encoding: "utf8" }).trim(); } catch { return null; } })(),
+    headCommit: (() => { try { return execSync('git -C path.join(__dirname, "..") rev-parse --short HEAD', { encoding: "utf8" }).trim(); } catch { return null; } })(),
     source: { name: SRC_NAME, url: SRC_URL, kind: "真实在播公开直播流（非抖音）", playedVia: "ffplay → 系统默认输出 → app loopback" },
     credentials: { appId: "configured", secretId: "configured", secretKey: "configured" },
     session: { sessionId: result.uiSessionId, ...sess.result.value },

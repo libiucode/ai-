@@ -1,7 +1,7 @@
 param(
   [int]$Port = 9223,
   [int]$Seconds = 60,
-  [string]$OutDir = "D:\ai盯播工具\app\evidence",
+  [string]$OutDir = "$PSScriptRoot\..\evidence",
   [string]$WavPath = "",
   [switch]$SkipButton
 )
@@ -10,7 +10,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
 # 用负责人的实例（PID 43608, CDP 9223）。只 attach，不拉 app。
-$libPath = "D:\ai盯播工具\app\scripts\cdp-lib.ps1"
+$libPath = "$PSScriptRoot\..\scripts\cdp-lib.ps1"
 $lib = [System.IO.File]::ReadAllText($libPath, [System.Text.Encoding]::UTF8)
 $lib = $lib.Replace('$script:CdpPort = 9222', "`$script:CdpPort = $Port")
 . ([scriptblock]::Create($lib))

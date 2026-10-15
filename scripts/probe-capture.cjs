@@ -13,7 +13,7 @@ const path = require("node:path");
 const SECONDS = Number(process.argv[2] ?? 10);
 const MODE = process.argv[3] ?? "both";
 const PORT = 9222;
-const OUT = path.join("D:\\ai盯播工具\\app", `capture-probe-${Date.now()}.json`);
+const OUT = path.join(__dirname, "..", `capture-probe-${Date.now()}.json`);
 
 function getJson(url) {
   return new Promise((resolve, reject) => {

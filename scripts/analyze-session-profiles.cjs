@@ -5,7 +5,7 @@
 // 用法: electron.exe scripts/analyze-session-profiles.cjs
 const path = require("node:path");
 const fs = require("node:fs");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 const db = new Database(dbPath, { readonly: true });
@@ -70,7 +70,7 @@ for (const p of out) {
   for (const j of p.contentJumps) console.log(`  ! 内容跳变 ${(j.jumpMs / 1000).toFixed(0)}s: ${(j.fromMs / 1000).toFixed(0)}s -> ${(j.toMs / 1000).toFixed(0)}s`);
 }
 
-const outPath = path.join("D:\\ai盯播工具\\app", "evidence", "session-profiles.json");
+const outPath = path.join(__dirname, "..", "evidence", "session-profiles.json");
 fs.writeFileSync(outPath, JSON.stringify({ generatedAt: new Date().toISOString(), sessions: out }, null, 2), "utf8");
 console.log(`\nwritten: ${outPath}`);
 db.close();

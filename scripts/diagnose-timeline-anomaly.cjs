@@ -1,7 +1,7 @@
 // 只读：查 5970a6d6 / d61e4b32 的「ASR 时间轴超出会话墙钟」异常根因。
 // 现象：会话墙钟 326s，但 speech_intervals 的 end_ms 到 551s（超出 226s）。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const db = new Database(path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db"), { readonly: true });
 

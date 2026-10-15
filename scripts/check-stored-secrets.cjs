@@ -2,7 +2,7 @@
 // 背景：settings 表历史上有 llm_api_key 与 asr_config（含 secretId/secretKey）明文。
 // runtimeConfig 已改为只读环境变量、不再读它们，但历史数据仍可能留在库里。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const db = new Database(path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db"), { readonly: true });
 

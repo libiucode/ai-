@@ -16,7 +16,7 @@
 function Get-AudioTimelineMs {
   param([string]$DbPath = "$env:APPDATA\ai-live-monitor\live-monitor.db", [string]$SessionPrefix = "")
   if (-not (Test-Path $DbPath)) { return $null }
-  $node = "D:\ai盯播工具\app\node_modules\electron\dist\electron.exe"
+  $node = "$PSScriptRoot\..\node_modules\electron\dist\electron.exe"
   if (-not (Test-Path $node)) { return $null }
   $prevElectron = $env:ELECTRON_RUN_AS_NODE
   $env:ELECTRON_RUN_AS_NODE = "1"

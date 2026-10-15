@@ -2,7 +2,7 @@
  * 真实 loopback 采集驱动：
  *   1. 通过 CDP 真实点击页面上「监听系统声音」按钮（带 userGesture），
  *      让 app 自己的 startLoopbackCapture 去 getDisplayMedia。
- *   2. 音频源：把 D:\ai盯播工具\app\scripts\asr-bench\audio 里的中文 WAV
+ *   2. 音频源：把 scripts/asr-bench/audio 里的中文 WAV
  *      推到 VB-CABLE Input，loopback 从 CABLE Output 采回。
  *
  * 为什么不用探针自建管线：orchestrator.ingestAudio() 第一行

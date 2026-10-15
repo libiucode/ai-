@@ -1,7 +1,7 @@
 // 读 SQLite 验证 transcript_segments 是否真的有对应稳态字幕行。
 // 用 Electron 内置 Node 跑（better-sqlite3 ABI 130 匹配）。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const dbPath = process.argv[2] || path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db");
 console.log("DB:", dbPath);

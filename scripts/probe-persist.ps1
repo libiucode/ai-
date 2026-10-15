@@ -25,12 +25,12 @@ param(
   [int]$Samples = 60,
   [int]$IntervalSec = 30,
   [int]$SwitchDeviceAtSample = 0,
-  [string]$OutDir = "D:\ai盯播工具\app\evidence"
+  [string]$OutDir = "$PSScriptRoot\..\evidence"
 )
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$libPath = "D:\ai盯播工具\app\scripts\cdp-lib.ps1"
+$libPath = "$PSScriptRoot\..\scripts\cdp-lib.ps1"
 $lib = [System.IO.File]::ReadAllText($libPath, [System.Text.Encoding]::UTF8).Replace('$script:CdpPort = 9222', "`$script:CdpPort = $Port")
 . ([scriptblock]::Create($lib))
 

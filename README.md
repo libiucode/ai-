@@ -2,11 +2,22 @@
 
 直播话术合规与质量的本地实时监控工具：麦克风或系统声音 → 腾讯云实时 ASR → 本地规则引擎 + LLM 分析 → 实时问题提醒与直播报告。
 
+> **当前交付范围：Windows x64。macOS 未实测。**
+>
 > **数据边界（必读，勿误读为"数据不出本机"）**
 > 会话、转写、问题、设置只保存在本机 SQLite。但两条链路**必然出网**：
 > - ASR：音频 16kHz/16bit/单声道，200ms 一包上传腾讯云实时语音识别；
 > - LLM：窗口内转写文本上传你配置的 OpenAI 兼容服务。
 > 因此"本地运行"指应用与数据存储在本机，不等于音频与转写不离开本机。
+
+## 开源前的几句话（给第一次来的人）
+
+这是一个**一周内从零做出来的 MVP**，不是成熟产品。它真实可用，但有明确的边界：
+
+- **干净的真实带货直播样本 = 0 场**。所有实测素材是 TTS 测试音、公开转播广告口播、影视剧对白——**都不是带货直播**。因此严禁说"已用真实带货直播验证"。
+- **到点自动开始未接通**。Chromium 的 user activation 只能由真实用户输入产生，程序无法自己触发系统声音采集。定时监听的 UI 与数据结构已做好，但**到点不会自动开始录制**。
+- 已知限制、隐私边界、第二阶段规划全部逐条列在 [`docs/known-limitations.md`](docs/known-limitations.md)；已修问题与归因在 [`docs/incident-review.md`](docs/incident-review.md)。**这两份是交付物的一部分，不是开发日志。**
+- 演示流程见 [`demo/script.md`](demo/script.md)，含"演示时不能说的话"清单。
 
 ## 项目简介
 
@@ -151,7 +162,7 @@ better-sqlite3 单个二进制只能对应一个运行时：Electron 33.4.11 需
 已完成并有本轮证据：
 
 - typecheck（双 tsconfig）、build、renderer smoke 通过。
-- `npm test` 全量通过：**16 个测试文件 / 157/157**（2026-10-14 22:42，盯播负责人亲自复跑）。fixture 通过**不代表**真实 ASR/LLM 已验收；其中 `real-window-harness` 的 3 项是工具自测，**不代表真实 LLM 已验收**。
+- `npm test` 全量通过：**31 个测试文件 / 355/355 通过**（2026-10-15 实测）。fixture 通过**不代表**真实 ASR/LLM 已验收；其中 `real-window-harness` 的 3 项是工具自测，**不代表真实 LLM 已验收**。
 - `npm test` 内部清空 `DSH_SECRET_*` 后运行，**不发出任何真实 ASR/LLM 请求**；真实联调脚本（`tencent-live-probe.js`、`asr-bench/*`、`verifyRealWindow`）直接运行以继承凭证。两者不要混用——用 `npm test` 的结果证明真实链路无效。
 - Windows 系统声音主进程 handler 已注册：主屏幕 + loopback 授权路径就位，默认要求真实用户手势。
 - 鉴权/上传连通性探针通过：12 秒本地合成多频波，451ms WebSocket 握手、2 个临时帧、1 个空文本稳态帧、close 1006。**只证明握手与上传链路连通，不证明识别出文本、不证明字幕、不证明端到端延迟验收。**
@@ -189,8 +200,8 @@ better-sqlite3 单个二进制只能对应一个运行时：Electron 33.4.11 需
 4. **话术步骤与阶段映射靠关键词触发**：漏说关键词的阶段不会出现在覆盖统计里。
 5. **短会话尾部窗口可能不分析**：会话在调度边界前结束时，最后一个窗口可能未触发分析，最终字幕仍保存。
 6. **DNS 瞬失败**：出现过 `getaddrinfo EAI_AGAIN`；持续断网时无法得到云端字幕。
-7. **未配置 LLM 时会反复弹 `LLM_NOT_CONFIGURED`（INC-09，用户必然遇到）**：实测一次会话内 UI 弹出两条相同 callout `[ANALYSIS_LLM_FAILED] LLM 分析失败: LLM_NOT_CONFIGURED: LLM 未配置`。根因是 `DSH_SECRET_LLM_API_KEY` 未提供时，orchestrator 每个分析窗口仍尝试调 LLM 并失败；按 60 秒间隔，一小时约 60 条，会淹没真实问题提示。已派话术分析改为「未配置则静默跳过，规则引擎照常跑」。**改造完成前**，看到该提示表示未配置 LLM 密钥，**规则引擎仍在正常工作**，不是产品故障。
-8. **安装包路径未定**：桌面端连续遇到模型服务错误（PI_AI_ERROR），NSIS 产物路径尚未回报。本文档不写安装包文件名——没有实证就不写路径。
+7. **~~未配置 LLM 时会反复弹 `LLM_NOT_CONFIGURED`~~（已修复，2026-10-15，INC-21）**：原描述为「按 60 秒间隔一小时约 60 条，会淹没真实提示」。修复方式：`orchestrator` 在 `llmState === "not_configured"` 时**直接跳过 LLM 分支**，不再每个窗口调用 `llm.analyze()`，该窗口记 `skipped` 而非 `success`——**不会再把「没做语义分析」伪装成「成功」**。规则引擎照常工作。同类高频错误（`CAPTURE_QUEUE_OVERFLOW` 等按音频帧 85ms 触发）也已改为节流（首次立即报，之后每 60 秒最多一条，累计次数不丢失）。回归测试见 `tests/ready-gate.test.ts`。
+8. **安装包产物**：`npm run package` 产出 `release-verify/AI盯播工具-Setup-0.1.0.exe`（约 85.8 MB，NSIS x64，未签名）。未签名状态下双击安装会触发 SmartScreen 提示，属预期。
 
 ## 演示脚本
 
@@ -199,7 +210,7 @@ better-sqlite3 单个二进制只能对应一个运行时：Electron 33.4.11 需
 ## 测试说明
 
 - `npm test`：electron-node 方式，全量单次 run 后退出；不要用 `npx vitest run`（会因 Node ABI 不匹配全红），也不要在测试前后切 ABI。
-- 本轮结果：**16 个测试文件 / 157/157 全通过**（2026-10-14 22:42，盯播负责人亲自复跑）。fixture 通过**不代表**真实 ASR/LLM 已验收。
+- 本轮结果：**31 个测试文件 / 355/355 全通过**（2026-10-15 实测）。fixture 通过**不代表**真实 ASR/LLM 已验收。
   - 其中 `tests/real-window-harness.test.ts` 的 3 项是**工具自测**：证明验证脚本（`verifyRealWindow.ts`）本身能跑通「真实窗口 → LLM → 证据门禁 → 报告」流程（隔离内存库、模拟 ASR 来源、模拟 fetch），**不代表真实 LLM 已验收**。
 - **`npm test` 内部会清空 `DSH_SECRET_*`（及公开的 `DSH_TENCENT_ASR_APP_ID` / `DSH_LLM_BASE_URL` / `DSH_LLM_MODEL`）再启动 vitest**，防止单测意外发出真实网络请求。因此**不要以为 `npm test` 能验证真实链路**——它一条真实 ASR/LLM 请求都不会发。
 - 真实联调（`scripts/tencent-live-probe.js`、`scripts/asr-bench/*`、`verifyRealWindow`）**不走 `npm test`**，直接运行以继承真实凭证。

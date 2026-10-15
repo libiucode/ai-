@@ -3,7 +3,7 @@
 // 假设 B：多次 ASR 连接/暂停恢复后切片器累计未重置。
 // 假设 C：speech_intervals 与 transcript_segments 用了不同时间基。
 const path = require("node:path");
-const Database = require(path.join("D:\\ai盯播工具\\app", "node_modules", "better-sqlite3"));
+const Database = require(path.join(__dirname, "..", "node_modules", "better-sqlite3"));
 
 const db = new Database(path.join(process.env.APPDATA, "ai-live-monitor", "live-monitor.db"), { readonly: true });
 

@@ -17,7 +17,7 @@ const { app, BrowserWindow, desktopCapturer, screen } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
-const OUT = path.join("D:\\ai盯播工具\\app", "evidence", `stalled-verify-${Date.now()}.json`);
+const OUT = path.join(__dirname, "..", "evidence", `stalled-verify-${Date.now()}.json`);
 const HEALTH_STALLED_MS = 3000;
 
 app.commandLine.appendSwitch("no-sandbox");

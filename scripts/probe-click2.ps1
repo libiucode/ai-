@@ -1,6 +1,6 @@
 param(
   [int]$Seconds = 25,
-  [string]$OutDir = "D:\ai盯播工具\app\evidence"
+  [string]$OutDir = "$PSScriptRoot\..\evidence"
 )
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
