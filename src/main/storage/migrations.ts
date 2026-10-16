@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
  * 没有任何升级路径——老库上新增列不会生效，用户升级后一读新列就直接报错。
  * 下面把「建表」和「升级」分开：建表语句保持幂等作为基线，升级走版本递进的迁移。
  */
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /** 按需加列。SQLite 的 ALTER TABLE ADD COLUMN 加可空列不需要重建表，成本最低。 */
 function addColumnIfMissing(
@@ -56,6 +56,30 @@ const MIGRATIONS: Array<{ version: number; apply: (db: Database.Database) => voi
     // 计数单位为「连接」而不是「emit 次数」——用户关心的是没录上发生几次。
     version: 5,
     apply: (db) => addColumnIfMissing(db, "sessions", "gap_count", "INTEGER DEFAULT 0"),
+  },
+  {
+    // v6：时间基显式化 + 会话级音频钟标定因子。
+    //
+    // 背景：`speech_intervals` 的 start_ms/end_ms 来自 PcmResamplerSlicer.nextStartMs
+    // （按样本数累加，与墙钟无关），而 computeMetrics 拿墙钟窗口去裁剪它——
+    // 两条时间轴混用，导致 speechMs / silenceMs / charsPerSpeechMinute /
+    // longestSpeechMs 失真（详见 docs/metrics-timebase.md）。
+    //
+    // 实测（2026-10-16，只读查用户库）：25 场会话中只有 10 场有 speech_intervals，
+    // 且 8 场「音频轴跨度 / 墙钟跨度」< 1（最低 0.044），2 场 > 1（最高 1.692）。
+    // 即漂移**不是单向偏快**，任何「乘一个固定系数」的假设都不成立。
+    //
+    // - timebase：标注每行的实际时间基。历史行 DEFAULT 'audio'（它们确实是音频轴）。
+    //   有了它，新旧数据不会混在一起（这是「不迁移、不重算」得以成立的前提）。
+    // - sessions.audio_clock_ratio：会话结束时的「音频轴跨度 / 墙钟跨度」。
+    //   用**会话级**而非窗口级，是因为实时链路与报告链路的窗口不同
+    //   （实时查 60s 子窗口、报告查全会话），窗口级会让同一场给出两种语速。
+    //   老会话为 NULL = 未标定，报告须显式标注，不得假装修好。
+    version: 6,
+    apply: (db) => {
+      addColumnIfMissing(db, "speech_intervals", "timebase", "TEXT NOT NULL DEFAULT 'audio'");
+      addColumnIfMissing(db, "sessions", "audio_clock_ratio", "REAL");
+    },
   },
 ];
 

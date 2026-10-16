@@ -49,7 +49,18 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
     intervals.reduce((max, i) => Math.max(max, i.endMs), 0),
     0,
   );
-  const metrics = computeMetrics(segments, intervals, startMs, endMs);
+  const ratio = store.getSessionAudioClockRatio(sessionId);
+  const calibrationState: "calibrated" | "uncalibrated" = ratio === null ? "uncalibrated" : "calibrated";
+  const metrics = computeMetrics(
+    segments,
+    intervals,
+    startMs,
+    endMs,
+    // 会话级标定因子（音频轴跨度 / 墙钟跨度）。老会话为 null = 未标定，
+    // 此时按 ratio=1 走「与标定引入前一致」的行为，并由报告显式标注「未标定」——
+    // 不能因为标不出来就假装数据可信（见 metrics.ts 的时间基契约）。
+    ratio ?? 1,
+  );
   const runStats = store.analysisRunStats(sessionId);
 
   const bySeverity: Record<string, number> = { info: 0, warning: 0, critical: 0 };
@@ -158,6 +169,17 @@ export function buildReportSummary(store: Store, sessionId: string): ReportSumma
       charsPerSpeechMinute: Math.round(metrics.charsPerSpeechMinute),
       charsPerTotalMinute: Math.round(metrics.charsPerTotalMinute),
       longestSilenceMs: Math.round(metrics.longestSilenceMs),
+      /**
+       * 本场语速类指标是否经过音频钟标定。
+       *
+       * - `calibrated`：会话结束时算过 `audio_clock_ratio`，指标已按墙钟校正。
+       * - `uncalibrated`：老会话（v6 之前）或算不出比值，按 ratio=1 处理——
+       *   `speechMs` / `charsPerSpeechMinute` / `longestSilenceMs` **可能失真**，
+       *   方向不定（实测 10 场中 8 场偏慢、2 场偏快）。
+       *
+       * 界面与导出必须据此标注，**不得让用户以为未标定的数字是准的**。
+       */
+      calibration: calibrationState,
     },
     llm: {
       requestCount: null,
@@ -211,6 +233,27 @@ const PRIORITY_LABEL: Record<number, string> = {
 };
 
 /** 话术步骤覆盖章节（未配置框架时给出说明，不虚构数据）。 */
+/**
+ * 标定状态提示（HTML 报告用）。
+ *
+ * 为什么必须显示：`speechMs` / `charsPerSpeechMinute` / `longestSilenceMs`
+ * 依据的是「音频轴」区间，而窗口是墙钟。未标定的会话这两个时间基可能不同步，
+ * 实测 10 场里有区间的会话：8 场音频轴偏慢（最低 0.044）、2 场偏快（最高 1.692）。
+ * 不标注的话，用户会把一个可能失真的语速当成事实——那不叫报告，叫误导。
+ */
+function calibrationNotice(report: ReportSummary): string {
+  if (report.metrics.calibration === "calibrated") {
+    return `<p class="kv">本场语速类指标已按音频钟标定（有效讲话、按讲话语速、最长静音）。</p>`;
+  }
+  return (
+    `<p class="warn">⚠ <b>本场语速类指标未标定</b>：本场没有可用的音频钟比值` +
+    `（v6 之前的历史会话，或该场算不出比值）。` +
+    `<b>有效讲话 / 语速（按讲话）/ 最长静音三项可能失真，方向不定</b>` +
+    `（实测既有会话中 8 场偏低、2 场偏高）。` +
+    `「中文字数」「语速（按总时长）」不受影响，可放心使用。</p>`
+  );
+}
+
 function scriptSection(report: ReportSummary): string {
   if (!report.script) {
     return `<h2>话术步骤覆盖</h2>\n<p class="kv">未配置话术框架，无步骤覆盖数据。</p>`;
@@ -348,6 +391,7 @@ ASR 连接与断线次数未统计。转写缺口已统计：本场 ${report.asr
 
 <h2>话术指标</h2>
 <p class="kv">语速分子为中文字数加英文词数；讲话语速除以有效讲话分钟，总时长语速除以分析覆盖时段的总分钟。</p>
+${calibrationNotice(report)}
 <table>
 <tbody>
 <tr><th>有效讲话</th><td>${formatMs(report.metrics.speechMs)}</td><th>静音</th><td>${formatMs(report.metrics.silenceMs)}</td></tr>

@@ -360,6 +360,16 @@ export interface ReportSummary {
     charsPerSpeechMinute: number;
     charsPerTotalMinute: number;
     longestSilenceMs: number;
+    /**
+     * 语速类指标是否经过音频钟标定。
+     *
+     * - `calibrated`：会话结束时有 `audio_clock_ratio`，指标已按墙钟校正。
+     * - `uncalibrated`：老会话或算不出比值，按 ratio=1 处理，**可能失真**。
+     *
+     * 界面与导出必须据此标注，不得让用户以为未标定的数字是准的。
+     * 详见 docs/metrics-timebase.md 与 src/main/analysis/metrics.ts 的时间基契约。
+     */
+    calibration?: "calibrated" | "uncalibrated";
   };
   llm: {
     requestCount: number | null;

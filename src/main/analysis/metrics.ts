@@ -3,7 +3,7 @@ import type { TranscriptSegment } from "../../shared/contracts";
 /**
  * 一个分析窗口的客观指标。
  *
- * ⚠️ **时间基契约（2026-10-15 定，见 docs/metrics-timebase.md）**
+ * ⚠️ **时间基契约（见 docs/metrics-timebase.md，2026-10-16 起带标定）**
  *
  * 本结构里**混用了两条不同的时间轴**，漂移时表现完全不同：
  *
@@ -11,7 +11,7 @@ import type { TranscriptSegment } from "../../shared/contracts";
  * |---|---|---|
  * | `totalMs` | **墙钟**（`windowEndMs - windowStartMs`） | ✅ 不受影响 |
  * | `chineseChars` / `englishWords` | 无时间基（纯计数） | ✅ 不受影响 |
- * | `speechMs` | **音频轴**（`speech_intervals`） | ⚠️ 失真 |
+ * | `speechMs` | **音频轴**（`speech_intervals`） | ⚠️ 失真（见下） |
  * | `silenceMs` | 音频轴（= `totalMs - speechMs`） | ⚠️ 失真，且**方向相反** |
  * | `charsPerSpeechMinute` | 字数 / 音频轴的分母 | ⚠️ 失真 |
  * | `charsPerTotalMinute` | 字数 / **墙钟**分母 | ✅ 不受影响 |
@@ -19,20 +19,27 @@ import type { TranscriptSegment } from "../../shared/contracts";
  * | `paceChanges` | **墙钟锚**（`transcript_segments`） | ✅ 不受影响 |
  *
  * 音频轴 = `PcmResamplerSlicer.nextStartMs`，**本地按样本数累加**，
- * 在「同一份音频被送两遍」这类异常下会跑到墙钟前面（实测 1.27~1.69 倍，
- * 见 `docs/audio-clock-anomaly.md`）。
+ * 因此它在会话起止、暂停期间不前进，也会在「同一份音频被送两遍」时跑到前面。
  *
- * **不要把 `speechMs` / `longestSilenceMs` 当作精确值对外呈现**——
- * 它们是「在音频轴可信的前提下」的估计。
+ * ## 标定（2026-10-16 引入）
+ *
+ * 失真**不是单向的**：只读查用户库实测 10 场有区间的会话，
+ * 8 场比值 < 1（最低 0.044 = 音频轴严重落后），2 场 > 1（最高 1.692）。
+ * 所以「乘一个固定系数」的假设不成立，任何精确断言都必须先标定。
+ *
+ * `computeMetrics` 接受可选的 `audioClockRatio`（会话级：音频轴跨度 / 墙钟跨度）：
+ * - **缺省 / 传 1** → 行为与标定引入前**逐字节一致**（既有测试与历史会话走这条路）。
+ * - **传实际比值** → 音频轴区间先按 `1/ratio` 缩放到墙钟，再裁剪。
+ *
+ * ⚠️ **即便标定后也只能当估计值**：真实漂移是「成段双份」而非全局均匀缩放，
+ * 用整场比值做的线性校正仍有残差。见 `metrics-timebase.md §4` 的边界说明。
  */
 export interface WindowMetrics {
   /** 墙钟：分析窗口覆盖的总时长。音频轴漂移时不受影响。 */
   totalMs: number;
   /**
-   * 音频轴：窗口内有效讲话时长。
-   * ⚠️ 失真风险：`speech_intervals` 时间戳来自本地样本数累加，
-   * 异常时会被放大；且窗口按墙钟裁剪，超出部分被截掉——
-   * 所以漂移时它**不是简单乘一个系数**（实测可涨可跌，见文档 §3）。
+   * 音频轴（已按 audioClockRatio 标定时为标定后值）：窗口内有效讲话时长。
+   * ⚠️ 未标定（ratio 缺省/为 1）时失真；标定后仍有残差，不得当精确值。
    */
   speechMs: number;
   /** 音频轴：`totalMs - speechMs`。与 `speechMs` 反向失真。 */
@@ -84,18 +91,42 @@ export function normalizedSimilarity(a: string, b: string): number {
   return 1 - prev[y.length] / Math.max(x.length, y.length);
 }
 
+/**
+ * 把音频轴区间标定到墙钟。
+ *
+ * `ratio` = 音频轴跨度 / 墙钟跨度（会话级，落库在 `sessions.audio_clock_ratio`）。
+ * - ratio > 1（音频轴跑快了，如双管线 1.692）→ 需要**缩小**
+ * - ratio < 1（音频轴落后了，如 0.044）→ 需要**放大**
+ * 两者都是乘 `1/ratio`。
+ *
+ * 非法值（0 / 负数 / NaN / Infinity）一律按 1 处理，绝不产出 NaN——
+ * 一个 NaN 会让整份报告的数字变成「NaN」，比失真更难发现。
+ */
+function calibrateIntervals(
+  intervals: Array<{ startMs: number; endMs: number }>,
+  ratio: number,
+): Array<{ startMs: number; endMs: number }> {
+  const safe = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  if (safe === 1) return intervals;
+  const k = 1 / safe;
+  // 以「音频轴原点」为基准缩放：区间本身就锚在会话起点（startMs 从 0 累加）。
+  // 不减去 min(startMs)，因为不减才是「从会话开始缩放」，与 ratio 的定义
+  // （整场音频轴跨度 / 整场墙钟跨度）一致。
+  return intervals.map((iv) => ({ startMs: iv.startMs * k, endMs: iv.endMs * k }));
+}
+
 export function computeMetrics(
   segments: TranscriptSegment[],
   speechIntervals: Array<{ startMs: number; endMs: number }>,
   windowStartMs: number,
   windowEndMs: number,
+  audioClockRatio?: number,
 ): WindowMetrics {
   const totalMs = Math.max(0, windowEndMs - windowStartMs);
   // 窗口裁剪：截断到墙钟窗口。
   // ⚠️ 这里是两条时间轴的交汇点——`speech_intervals` 是音频轴、
-  // 窗口边界是墙钟。音频轴漂移时，越出窗口尾部的讲话区间会被**整段裁掉**，
-  // 所以 `speechMs` 不是随漂移单调放大（实测可涨可跌，见文档 §3）。
-  const intervals = speechIntervals
+  // 窗口边界是墙钟。故裁剪前必须先标定（audioClockRatio 缺省时是恒等变换）。
+  const intervals = calibrateIntervals(speechIntervals, audioClockRatio ?? 1)
     .map((iv) => ({ startMs: Math.max(iv.startMs, windowStartMs), endMs: Math.min(iv.endMs, windowEndMs) }))
     .filter((iv) => Number.isFinite(iv.startMs) && Number.isFinite(iv.endMs) && iv.endMs > iv.startMs)
     .sort((a, b) => a.startMs - b.startMs);

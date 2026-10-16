@@ -6,7 +6,7 @@ import path from "node:path";
 import { SessionOrchestrator } from "../src/main/analysis/orchestrator";
 import { TencentAsrAdapter } from "../src/main/asr/tencentAdapter";
 import { Store } from "../src/main/storage/store";
-import { migrate, readVersion } from "../src/main/storage/migrations";
+import { migrate, readVersion, CURRENT_SCHEMA_VERSION } from "../src/main/storage/migrations";
 
 /**
  * task-1 专项：ASR 断线缺口计数。
@@ -211,7 +211,10 @@ describe("schema v5 迁移：sessions.gap_count", () => {
     const reopened = new Database(file);
     expect(readVersion(reopened)).toBe(4);
     migrate(reopened);
-    expect(readVersion(reopened)).toBe(5);
+    // 断言「迁移跑到了最新版本」，而不是硬编码某个版本号——
+    // 硬编码会让每次新增 migration 都假红（v6 引入时就踩到过），
+    // 而这类断言的真正意图是「migrate() 后即当前版本」。
+    expect(readVersion(reopened)).toBe(CURRENT_SCHEMA_VERSION);
     const row = reopened.prepare(`SELECT id, status, gap_count FROM sessions WHERE id = 'old-1'`).get() as
       | { id: string; status: string; gap_count: number | null } | undefined;
     expect(row).toBeDefined();
@@ -234,7 +237,7 @@ describe("schema v5 迁移：sessions.gap_count", () => {
     reopened.prepare(`UPDATE sessions SET gap_count = 3 WHERE id IS NOT NULL`).run();
     expect(() => migrate(reopened)).not.toThrow();
     // 幂等的关键：第二次 migrate 不会把已经累加的值重置回 0。
-    expect(readVersion(reopened)).toBe(5);
+    expect(readVersion(reopened)).toBe(CURRENT_SCHEMA_VERSION);
     const rows = reopened.prepare(`SELECT gap_count FROM sessions`).all() as Array<{ gap_count: number }>;
     for (const r of rows) expect(r.gap_count).toBe(3);
     reopened.close();
@@ -245,7 +248,7 @@ describe("schema v5 迁移：sessions.gap_count", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "asr-gap-mig-"));
     const store = new Store(path.join(dir, "test.db"));
     try {
-      expect(readVersion(store.db)).toBe(5);
+      expect(readVersion(store.db)).toBe(CURRENT_SCHEMA_VERSION);
       store.createSession({ id: "s1", startedAtIso: new Date().toISOString(), audioSource: "microphone", deviceId: null });
       expect(store.getSession("s1")?.gap_count).toBe(0);
       expect(store.listSessionSummaries()[0]).toMatchObject({ gapCount: 0, hasGap: false });

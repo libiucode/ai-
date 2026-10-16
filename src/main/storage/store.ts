@@ -168,6 +168,38 @@ export class Store {
     return row?.gap_count ?? 0;
   }
 
+  /**
+   * 落库会话级「音频钟标定因子」= 音频轴跨度 / 墙钟跨度。
+   *
+   * 为什么要会话级而不是窗口级：实时分析查的是 60s 子窗口、报告查的是全会话，
+   * 用窗口跨度算因子会让**同一场会话在实时和报告里给出两种语速**。
+   * 会话级因子保证两条链路一致。
+   *
+   * 为什么不能事后重算：音频轴的漂移是「同一份音频被送两遍」造成的**成段双份**，
+   * 送了几份、哪几段是双份没有任何记录（产品链路不保存 chunk 计数）。
+   * 事后用整场比值反推等于编数字。所以只能在会话结束时算一次并落库，
+   * 错过就没有了——这也是老会话 `audio_clock_ratio` 为 NULL 的原因。
+   *
+   * 只在 ratio 正常（有限正数）时写入；异常值不写，留 NULL 表示「未标定」，
+   * 报告侧据此显式标注，不假装修好。
+   */
+  setSessionAudioClockRatio(sessionId: string, ratio: number): boolean {
+    if (!Number.isFinite(ratio) || ratio <= 0) return false;
+    const info = this.db
+      .prepare(`UPDATE sessions SET audio_clock_ratio = ? WHERE id = ?`)
+      .run(ratio, sessionId);
+    return info.changes > 0;
+  }
+
+  /** 读取会话级标定因子。NULL（老会话 / 未算过）返回 null，调用方按未标定处理。 */
+  getSessionAudioClockRatio(sessionId: string): number | null {
+    const row = this.db
+      .prepare(`SELECT audio_clock_ratio FROM sessions WHERE id = ?`)
+      .get(sessionId) as { audio_clock_ratio: number | null } | undefined;
+    const v = row?.audio_clock_ratio;
+    return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+  }
+
   /** Deletes a session and all dependent rows. Returns true if a row was removed. */
   deleteSession(id: string): boolean {
     const tx = this.db.transaction(() => {

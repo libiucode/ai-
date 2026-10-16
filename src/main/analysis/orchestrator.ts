@@ -435,6 +435,7 @@ export class SessionOrchestrator {
     }
     this.status = "stopped";
     this.store.updateSessionStatus(this.sessionId!, "stopped", new Date().toISOString(), endReason);
+    this.recordAudioClockRatio();
     this.audioStatus = { ...this.audioStatus, state: "idle" };
     this.emit("capture.status", this.audioStatus);
     this.asrStatus = { ...this.asrStatus, state: "closed" };
@@ -456,6 +457,58 @@ export class SessionOrchestrator {
           : `本场监听已自动结束（${endReason}）`,
         false,
       ));
+    }
+  }
+
+  /**
+   * 会话进行中的「音频钟标定因子」估算 = 至今音频轴跨度 / 至今墙钟。
+   *
+   * 会话结束时 `recordAudioClockRatio()` 会用全程值覆盖落库值，
+   * 但实时分析不能等会话结束——它需要当场一个可用因子。
+   * 两者定义相同（音频轴 / 墙钟），故不会产生「实时一套、报告一套」的口径分裂。
+   *
+   * 返回 null 表示「暂时算不出」（无区间 / 跨度非正），调用方按 1 处理（未标定）。
+   */
+  private liveAudioClockRatio(): number | null {
+    if (!this.sessionId) return null;
+    const wall = this.nowMs();
+    if (!(wall > 0)) return null;
+    try {
+      const intervals = this.store.querySpeechIntervals(this.sessionId, 0, Number.MAX_SAFE_INTEGER);
+      if (!intervals.length) return null;
+      const audioSpan = Math.max(...intervals.map((iv) => iv.endMs)) -
+        Math.min(...intervals.map((iv) => iv.startMs));
+      if (!(audioSpan > 0)) return null;
+      const ratio = audioSpan / wall;
+      return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 会话结束时算一次「音频钟标定因子」= 音频轴跨度 / 墙钟跨度，落库备查。
+   *
+   * 为什么必须在结束时算：`audio_clock_ratio` 是**会话级**因子，
+   * 实时链路（60s 子窗口）与报告链路（全会话）都用它，保证同一场给出一致的语速。
+   * 而音频轴的漂移（成段双份）没有任何记录，事后无法反推——错过此刻就没有了。
+   *
+   * 边界：只在「查得到区间、跨度都为正」时写。否则留 NULL 表示未标定，
+   * 由报告侧显式标注，**不写一个猜测值**（那正是 known-limitations 禁止的「造假数字」）。
+   */
+  private recordAudioClockRatio(): void {
+    if (!this.sessionId) return;
+    try {
+      const intervals = this.store.querySpeechIntervals(this.sessionId, 0, Number.MAX_SAFE_INTEGER);
+      if (!intervals.length) return;
+      const audioSpan = Math.max(...intervals.map((iv) => iv.endMs)) -
+        Math.min(...intervals.map((iv) => iv.startMs));
+      const wallSpan = this.nowMs();
+      // 墙钟跨度太小（会话刚开就停）时比值无意义，不写。
+      if (!(audioSpan > 0) || !(wallSpan > 0)) return;
+      this.store.setSessionAudioClockRatio(this.sessionId, audioSpan / wallSpan);
+    } catch {
+      // 标定是「尽力而为」的附加信息，它的失败绝不能让停止会话本身失败。
     }
   }
 
@@ -746,7 +799,13 @@ export class SessionOrchestrator {
         endMs,
       );
       const intervals = this.store.querySpeechIntervals(sessionId, startMs, endMs);
-      const metrics = computeMetrics(segments, intervals, startMs, endMs);
+      // 实时链路的标定因子：会话进行中用「至今」的比值估算。
+      // 由于音频轴与墙钟在正常会话里近似同速，该估算在实时分析中足够；
+      // 报告链路一律用会话结束时落库的精确值（store.getSessionAudioClockRatio），
+      // 因此**同一场会话在实时与报告里不会出现两套口径**——两者都来自同一个
+      // 「音频轴 / 墙钟」定义，只是一个用至今、一个用全程。
+      const liveRatio = this.liveAudioClockRatio();
+      const metrics = computeMetrics(segments, intervals, startMs, endMs, liveRatio ?? 1);
 
       // 复用会话绑定的框架：不再每个窗口重读 listFrameworks()[0]，
       // 否则多框架会话会被静默切回第一个框架。

@@ -181,3 +181,91 @@ describe("契约回归：失真字段不得被当作精确值（钉住已知行�
     expect(m.charsPerSpeechMinute).toBe(base.charsPerSpeechMinute);
   });
 });
+
+/**
+ * 标定（2026-10-16 引入）：会话级 audioClockRatio 把音频轴区间缩放到墙钟。
+ *
+ * 上面「失真的字段」那组用例钉的是**未标定**行为（ratio 缺省 = 1），
+ * 它们同时是 docs/metrics-timebase.md 的实测证据，必须保留可复现。
+ * 下面这组钉的是**标定后**的行为。
+ */
+describe("音频钟标定：audioClockRatio 让失真字段回到墙钟口径", () => {
+  it("缺省不传 ratio 时，行为与标定引入前逐字节一致（历史会话/既有调用方）", () => {
+    const intervals = [{ startMs: 5000, endMs: 20000 }, { startMs: 40000, endMs: 55000 }];
+    const segments = [
+      seg("a", 5000, 12000, TEXT), seg("b", 12000, 20000, TEXT),
+      seg("c", 40000, 47000, TEXT), seg("d", 47000, 55000, TEXT),
+    ];
+    const omitted = computeMetrics(segments, intervals, 0, WALL_END);
+    const explicitOne = computeMetrics(segments, intervals, 0, WALL_END, 1);
+    expect(omitted).toEqual(explicitOne);
+  });
+
+  it("场景 A 标定后：讲话不再被裁掉，speechMs 回到 30000", () => {
+    const intervals = [{ startMs: 5000, endMs: 20000 }, { startMs: 40000, endMs: 55000 }];
+    const segments = [
+      seg("a", 5000, 12000, TEXT), seg("b", 12000, 20000, TEXT),
+      seg("c", 40000, 47000, TEXT), seg("d", 47000, 55000, TEXT),
+    ];
+    const d = drift(segments, intervals, RATIO);
+    // 未标定：25350（第二段被窗口裁掉）
+    expect(computeMetrics(d.segments, d.intervals, 0, WALL_END).speechMs).toBe(25350);
+    // 标定后：把音频轴区间除回 RATIO，应恢复为真实的 30000
+    const calibrated = computeMetrics(d.segments, d.intervals, 0, WALL_END, RATIO);
+    expect(calibrated.speechMs).toBe(30000);
+    // 与未漂移基线一致 —— 这才是「修好了」的判据
+    const base = computeMetrics(segments, intervals, 0, WALL_END);
+    expect(calibrated.speechMs).toBe(base.speechMs);
+    expect(calibrated.longestSilenceMs).toBe(base.longestSilenceMs);
+    expect(calibrated.charsPerSpeechMinute).toBeCloseTo(base.charsPerSpeechMinute, 6);
+  });
+
+  it("场景 C（最危险）标定后：不再报「整场静默 / 语速 0」", () => {
+    const intervals = [{ startMs: 45000, endMs: 55000 }];
+    const segments = [seg("a", 45000, 55000, TEXT)];
+    const d = drift(segments, intervals, RATIO);
+    // 未标定：整段被推出窗口 → 语速 0、最长静默 = 整个窗口（都是漂移造的假事实）
+    expect(computeMetrics(d.segments, d.intervals, 0, WALL_END).speechMs).toBe(0);
+    // 标定后：恢复为真实的 10000ms
+    const calibrated = computeMetrics(d.segments, d.intervals, 0, WALL_END, RATIO);
+    expect(calibrated.speechMs).toBe(10000);
+    expect(calibrated.charsPerSpeechMinute).toBeGreaterThan(0);
+    expect(calibrated.longestSilenceMs).toBeLessThan(WALL_END);
+  });
+
+  it("ratio < 1（音频轴落后，实测 8/10 场属此类）会放大区间", () => {
+    // 9df419b4 实测比值 0.044 是最极端的一类；此处用 0.5 便于断言。
+    const intervals = [{ startMs: 0, endMs: 10000 }];
+    const segments = [seg("a", 0, 10000, TEXT)];
+    const m = computeMetrics(segments, intervals, 0, 60000, 0.5);
+    // 10000 / 0.5 = 20000
+    expect(m.speechMs).toBe(20000);
+  });
+
+  it("ratio 非法（0 / 负数 / NaN / Infinity）一律按 1 处理，绝不产出 NaN", () => {
+    const intervals = [{ startMs: 0, endMs: 10000 }];
+    const segments = [seg("a", 0, 10000, TEXT)];
+    for (const bad of [0, -1, NaN, Infinity, -Infinity]) {
+      const m = computeMetrics(segments, intervals, 0, 60000, bad);
+      expect(Number.isNaN(m.speechMs), String(bad)).toBe(false);
+      expect(m.speechMs, String(bad)).toBe(10000);
+      expect(Number.isFinite(m.charsPerSpeechMinute), String(bad)).toBe(true);
+    }
+  });
+
+  it("标定不会改变本来就安全的字段", () => {
+    const intervals = [{ startMs: 5000, endMs: 20000 }, { startMs: 40000, endMs: 55000 }];
+    const segments = [
+      seg("a", 5000, 12000, TEXT), seg("b", 12000, 20000, TEXT),
+      seg("c", 40000, 47000, TEXT), seg("d", 47000, 55000, TEXT),
+    ];
+    const d = drift(segments, intervals, RATIO);
+    const uncal = computeMetrics(d.segments, d.intervals, 0, WALL_END);
+    const cal = computeMetrics(d.segments, d.intervals, 0, WALL_END, RATIO);
+    // totalMs / 字数 / 总时语速 / paceChanges 是墙钟锚，标定前后必须一致
+    expect(cal.totalMs).toBe(uncal.totalMs);
+    expect(cal.chineseChars).toBe(uncal.chineseChars);
+    expect(cal.charsPerTotalMinute).toBe(uncal.charsPerTotalMinute);
+    expect(cal.paceChanges).toEqual(uncal.paceChanges);
+  });
+});
