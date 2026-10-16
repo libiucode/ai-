@@ -108,11 +108,34 @@ export type CredentialKey =
 export interface CredentialSetResult {
   ok: boolean;
   message: string;
+  /** 本次写入后的实际存储形态（加密 / 明文降级）。 */
+  mode?: CredentialStorageMode;
 }
 
+/**
+ * 凭证存储形态。
+ *
+ * - `encrypted`：系统加密可用（Windows DPAPI / macOS Keychain / Linux 密钥环），
+ *   库里存的是密文。
+ * - `plaintext`：系统加密**不可用**，库里存的是明文（带 `plain:` 前缀）。
+ *   功能不受影响，但界面必须如实告知用户——这是 2026-10-16 的策略变更：
+ *   原先「加密不可用就拒绝落盘、禁用输入框」在客户现场（服务器 / 远程桌面 /
+ *   受限账户）会让用户完全无法配置密钥，故改为降级存明文 + 显著警告。
+ */
+export type CredentialStorageMode = "encrypted" | "plaintext" | "none";
+
 export interface CredentialStatusResult {
-  /** 当前系统是否支持加密存储（Windows DPAPI / macOS Keychain / Linux 密钥环）。 */
+  /**
+   * 是否**可写**凭证。恒为 true——降级明文通道保证了这一点。
+   *
+   * 注意语义已收窄：它**不再**表示「系统是否支持加密存储」。
+   * 需要判断加密与否请用 `mode`。字段保留是为了兼容既有调用方。
+   */
   available: boolean;
+  /** 当前实际的存储形态。界面据此决定是否显示「明文存储」警告。 */
+  mode: CredentialStorageMode;
+  /** 哪些键是以明文形态存放的（界面可据此逐项提示）。 */
+  plaintextKeys?: Record<CredentialKey, boolean>;
   /** 本机是否已存该凭证（不回显明文）。 */
   configured: Record<CredentialKey, boolean>;
   /** 环境变量里是否提供了该凭证。 */

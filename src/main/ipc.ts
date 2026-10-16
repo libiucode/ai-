@@ -20,6 +20,8 @@ import { readRuntimeAsrConfig, readRuntimeLlmConfig, withoutCredentials, diagnos
 import {
   setCredential,
   hasCredential,
+  isPlaintextCredential,
+  storageMode,
   clearCredentials,
   credentialStorageAvailable,
   type CredentialKey,
@@ -254,38 +256,43 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     const value = String(obj.value ?? "");
     if (!isCredentialKey(key)) return { ok: false, message: "未知的凭证键" };
     const ok = setCredential(store, key, value);
+    if (!ok) {
+      // 走到这里说明连降级明文写入都失败了（凭据存储彻底不可用）。
+      return { ok: false, message: "凭证保存失败：本机凭据存储不可用，请检查数据库写入权限。" };
+    }
     return {
-      ok,
-      message: ok
+      ok: true,
+      mode: storageMode(),
+      message: credentialStorageAvailable()
         ? "凭证已加密保存（绑定本机当前用户账户）"
-        : "当前系统不支持加密存储，未保存。请改用环境变量启动。",
+        : "凭证已保存，但当前系统不支持加密存储，本机保存的是**明文**。",
     };
   });
 
   ipcMain.handle("credential.status", async () => {
-    if (!credentialStorageAvailable()) {
-      return {
-        available: false,
-        configured: { TENCENT_ASR_SECRET_ID: false, TENCENT_ASR_SECRET_KEY: false, LLM_API_KEY: false },
-        fromEnv: {
-          TENCENT_ASR_SECRET_ID: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID),
-          TENCENT_ASR_SECRET_KEY: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY),
-          LLM_API_KEY: Boolean(process.env.DSH_SECRET_LLM_API_KEY),
-        },
-      };
-    }
+    const fromEnv = {
+      TENCENT_ASR_SECRET_ID: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID),
+      TENCENT_ASR_SECRET_KEY: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY),
+      LLM_API_KEY: Boolean(process.env.DSH_SECRET_LLM_API_KEY),
+    };
+    // ⚠️ available 不再表示「能否配置」。降级明文通道保证了总能配置，
+    // 所以它恒为 true；界面据 mode 决定是否显示「明文存储」警告。
+    // 保留 available 字段是为了兼容既有调用方，语义已收窄为「可写」。
     return {
       available: true,
+      mode: storageMode(),
+      /** 是否存在以明文形态存放的凭证（界面据此显示醒目警告）。 */
+      plaintextKeys: {
+        TENCENT_ASR_SECRET_ID: isPlaintextCredential(store, "TENCENT_ASR_SECRET_ID"),
+        TENCENT_ASR_SECRET_KEY: isPlaintextCredential(store, "TENCENT_ASR_SECRET_KEY"),
+        LLM_API_KEY: isPlaintextCredential(store, "LLM_API_KEY"),
+      },
       configured: {
         TENCENT_ASR_SECRET_ID: hasCredential(store, "TENCENT_ASR_SECRET_ID"),
         TENCENT_ASR_SECRET_KEY: hasCredential(store, "TENCENT_ASR_SECRET_KEY"),
         LLM_API_KEY: hasCredential(store, "LLM_API_KEY"),
       },
-      fromEnv: {
-        TENCENT_ASR_SECRET_ID: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID),
-        TENCENT_ASR_SECRET_KEY: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY),
-        LLM_API_KEY: Boolean(process.env.DSH_SECRET_LLM_API_KEY),
-      },
+      fromEnv,
     };
   });
 

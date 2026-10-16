@@ -105,8 +105,9 @@ export function SettingsPage() {
   async function doSave() {
     if (!settings) return;
     const payload: Settings = { ...settings };
-    // 只保存公开配置。密钥字段一律不传：主进程只认环境变量，
-    // 传了也会被忽略，还会诱导用户以为"填了就能生效"。
+    // 只保存公开配置。密钥走独立的「保存密钥」按钮（credential.set），
+    // 不随本页提交——这样密钥字段永远不经过 SettingsSchema，
+    // 也就不可能被误写进 app_settings 或回显。
     if (asrAppId) {
       payload.asr = { provider: "tencent", appId: asrAppId, secretId: "", secretKey: "" };
     } else {
@@ -187,8 +188,9 @@ export function SettingsPage() {
   async function testAsr() {
     setTesting("asr");
     setAsrMsg(null);
-    // 连接测试统一走 useStored：主进程读环境变量里的密钥，
-    // 界面没有也不可能有 secret 输入框。
+    // 连接测试统一走 useStored：主进程按「环境变量 > 本机密文」取值。
+    // 界面上的输入框填完后要先点「保存密钥」才进 credentialStore；
+    // 测试读的是已保存的凭证，不读输入框里的未保存内容（避免半保存态测试）。
     if (asrAppId && !/^\d+$/.test(asrAppId)) {
       setTesting(null);
       setAsrMsg({ ok: false, text: `App ID 应为纯数字（腾讯云控制台 → 账号信息里的 APPID，如 1258899888），当前填的是「${asrAppId}」` });
@@ -198,7 +200,7 @@ export function SettingsPage() {
       const result = await window.appApi.testAsrConnection({ useStored: true });
       setAsrMsg(
         result.ok
-          ? { ok: true, text: "环境密钥连接成功" }
+          ? { ok: true, text: "ASR 连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
     } catch (err) {
@@ -216,7 +218,7 @@ export function SettingsPage() {
       const result = await window.appApi.testLlmConnection({ useStored: true });
       setLlmMsg(
         result.ok
-          ? { ok: true, text: "环境密钥连接成功" }
+          ? { ok: true, text: "LLM 连接成功" }
           : { ok: false, text: `连接失败：${result.error?.message ?? "未知错误"}` },
       );
     } catch (err) {
@@ -492,11 +494,12 @@ export function SettingsPage() {
         </div>
       </Panel>
 
-      <Panel title="密钥（加密存本机）">
-        {credStatus && !credStatus.available ? (
+      <Panel title="密钥（存本机）">
+        {credStatus?.mode === "plaintext" ? (
           <div className="callout callout-warn" style={{ marginTop: 0, marginBottom: 10 }}>
             ⚠ 当前系统不支持加密存储（Windows DPAPI / macOS Keychain / Linux 密钥环），
-            输入框已禁用以避免明文落盘。请改用环境变量启动本应用。
+            密钥将以<b>明文</b>保存在本机数据库中。功能不受影响，但请知悉：
+            能读到该数据库文件的程序即可看到密钥。若在意，请改用环境变量启动本应用。
           </div>
         ) : null}
         <div style={{ fontSize: 13, color: tokens.textDim, marginBottom: 10 }}>
@@ -513,8 +516,10 @@ export function SettingsPage() {
           {credMsg ? <span className={credMsg.ok ? "toast-ok" : "toast-err"}>{credMsg.text}</span> : null}
         </div>
         <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
-          密文存于本机数据库，绑定当前系统账户（Windows 用 DPAPI，macOS 用 Keychain），
-          换机器或换账户后无法解密，会当作未配置。它防的是「明文落盘被随手看到」，
+          {credStatus?.mode === "plaintext"
+            ? "当前以明文存于本机数据库（本机系统加密不可用）。"
+            : "密文存于本机数据库，绑定当前系统账户（Windows 用 DPAPI，macOS 用 Keychain）。"}
+          换机器或换账户后可能无法解密，会当作未配置。它防的是「明文落盘被随手看到」，
           不防同账户下的其它程序；有环境变量时仍以环境变量为准。
         </div>
       </Panel>
