@@ -418,13 +418,6 @@ export class Store {
       .all(sessionId) as Array<Record<string, unknown>>;
   }
 
-  getIssue(id: string): Array<Record<string, unknown>> | undefined {
-    const row = this.db.prepare(`SELECT * FROM issues WHERE id=?`).get(id) as
-      | Record<string, unknown>
-      | undefined;
-    return row ? [row] : undefined;
-  }
-
   /** Aggregate analysis run stats for a session (used by the report). */
   analysisRunStats(sessionId: string): { total: number; success: number; failed: number } {
     const rows = this.db

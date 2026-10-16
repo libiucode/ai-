@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Framework, ScheduleConfig, Settings } from "../../shared/contracts";
 import { WEEKDAY_LABEL, formatCountdown, nextScheduledStart } from "../../shared/schedule";
-import type { AsrStatusInfo, LlmStatusInfo } from "../../shared/api";
+import type {
+  AsrStatusInfo,
+  CredentialKey,
+  CredentialStatusResult,
+  LlmStatusInfo,
+} from "../../shared/api";
 import { Badge, Button, Field, Panel, tokens } from "../ui/basics";
 
 /** 默认排期：每天 20:00–23:00 系统声音。 */
@@ -24,14 +29,34 @@ export function SettingsPage() {
   const [testing, setTesting] = useState<"asr" | "llm" | null>(null);
 
   // 只保留公开配置的编辑态：App ID、Base URL、模型名。
-  // 密钥一律来自进程环境变量，界面不提供任何 secret 输入。
+  // 密钥单独在「密钥」面板填写（加密存本机），不随本页保存。
   const [asrAppId, setAsrAppId] = useState("");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmModel, setLlmModel] = useState("");
 
-  /** 配置来源是否为环境变量（主进程从进程 env 读密钥）。 */
-  const asrFromEnv = asrStatus?.source === "environment";
-  const llmFromEnv = llmStatus?.source === "environment";
+  /**
+   * 密钥编辑态：只在用户主动输入时存在，保存后即清空，永不回填明文。
+   * 读取只走 `credentialStatus()`（主进程只回布尔值，不回密钥本身）。
+   */
+  const [secrets, setSecrets] = useState<Record<CredentialKey, string>>({
+    TENCENT_ASR_SECRET_ID: "",
+    TENCENT_ASR_SECRET_KEY: "",
+    LLM_API_KEY: "",
+  });
+  /** 本机是否已存各凭证 + 环境变量是否提供 + 系统是否支持加密。 */
+  const [credStatus, setCredStatus] = useState<CredentialStatusResult | null>(null);
+  const [credMsg, setCredMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [savingCred, setSavingCred] = useState(false);
+
+  /** 环境变量已提供时界面填写无效（主进程 env 优先），据此禁用输入框并说明。 */
+  function envProvided(key: CredentialKey): boolean {
+    return Boolean(credStatus?.fromEnv?.[key]);
+  }
+  /** 本机已存且环境变量未提供 → 显示「已配置…」，不再要求用户重填。 */
+  function storedConfigured(key: CredentialKey): boolean {
+    return Boolean(credStatus?.configured?.[key]) && !envProvided(key);
+  }
+
   /** 话术框架列表，供排期选择"用哪个框架"。 */
   const [frameworks, setFrameworks] = useState<Framework[]>([]);
   /** 每秒心跳，让"下次自动开始"倒计时会走。 */
@@ -47,16 +72,18 @@ export function SettingsPage() {
   }, []);
 
   async function reload() {
-    const [s, asrInfo, llmInfo, fws] = await Promise.all([
+    const [s, asrInfo, llmInfo, fws, cred] = await Promise.all([
       window.appApi.getSettings(),
       window.appApi.getAsrStatus(),
       window.appApi.getLlmStatus(),
       window.appApi.listFrameworks().catch(() => [] as Framework[]),
+      window.appApi.credentialStatus().catch(() => null),
     ]);
     setSettings(s);
     setAsrStatus(asrInfo);
     setLlmStatus(llmInfo);
     setFrameworks(fws);
+    setCredStatus(cred);
     setLlmBaseUrl(s.llm?.base_url ?? "");
     setLlmModel(s.llm?.model ?? "");
     // 必须回填已存的 App ID：doSave() 里 `if (asrAppId) {...} else { delete payload.asr }`，
@@ -100,11 +127,61 @@ export function SettingsPage() {
       ok
         ? {
             ok: true,
-            text: "公开配置已保存。密钥由环境变量提供，不会经过界面、也不会写入本地数据库。",
+            text: "公开配置已保存。密钥不在此处提交——请在下方「密钥」面板单独保存。",
           }
         : { ok: false, text: "保存失败：字段校验未通过" },
     );
     if (ok) await reload();
+  }
+
+  /**
+   * 保存填写过的密钥（空框跳过，不覆盖本机已存的值）。
+   * 保存成功后立刻清空编辑态——明文不在内存里多留一秒。
+   */
+  async function doSaveCredentials() {
+    const filled = (Object.keys(secrets) as CredentialKey[]).filter((k) => secrets[k].trim());
+    if (filled.length === 0) {
+      setCredMsg({ ok: false, text: "没有填写任何密钥（留空表示不修改）。" });
+      return;
+    }
+    setSavingCred(true);
+    setCredMsg(null);
+    try {
+      const results = await Promise.all(
+        filled.map((k) => window.appApi.setCredential(k, secrets[k].trim())),
+      );
+      const failed = results.filter((r) => !r.ok);
+      setSecrets({ TENCENT_ASR_SECRET_ID: "", TENCENT_ASR_SECRET_KEY: "", LLM_API_KEY: "" });
+      if (failed.length > 0) {
+        setCredMsg({
+          ok: false,
+          text: failed[0].message ?? "保存失败：当前系统不支持加密存储，请改用环境变量。",
+        });
+      } else {
+        setCredMsg({
+          ok: true,
+          text: `已保存 ${filled.length} 项密钥（系统钥匙串加密，绑定到本机当前账户）。`,
+        });
+      }
+      await reload();
+    } catch (err) {
+      setCredMsg({ ok: false, text: `保存失败：${err instanceof Error ? err.message : "未知错误"}` });
+    } finally {
+      setSavingCred(false);
+    }
+  }
+
+  /** 清除本机已存的全部凭证。环境变量不受影响。 */
+  async function doClearCredentials() {
+    setSavingCred(true);
+    setCredMsg(null);
+    try {
+      const r = await window.appApi.clearCredentials();
+      setCredMsg({ ok: r.ok, text: r.message });
+      await reload();
+    } finally {
+      setSavingCred(false);
+    }
   }
 
   async function testAsr() {
@@ -134,7 +211,7 @@ export function SettingsPage() {
   async function testLlm() {
     setTesting("llm");
     setLlmMsg(null);
-    // 与 ASR 同理：密钥只从环境变量读，界面没有也不该有 key 输入。
+    // 连接测试走 useStored：主进程按「环境变量 > 本机密文」取值。
     try {
       const result = await window.appApi.testLlmConnection({ useStored: true });
       setLlmMsg(
@@ -160,25 +237,37 @@ export function SettingsPage() {
             <>
               <Badge tone="ok">已配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
-                {asrFromEnv
-                  ? `密钥来自环境变量（App ID ${asrStatus.appId}）`
-                  : "密钥来自本机数据库（旧版配置，建议改用环境变量）"}
+                {asrStatus?.message ?? `App ID ${asrStatus?.appId ?? ""}`}
               </span>
             </>
           ) : (
             <>
               <Badge tone="dim">未配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
-                需要 DSH_SECRET_TENCENT_ASR_SECRET_ID / DSH_SECRET_TENCENT_ASR_SECRET_KEY 环境变量
+                {asrStatus?.message ?? "需要 Secret ID 与 Secret Key（可在本页填写，或由环境变量提供）"}
               </span>
             </>
           )}
         </div>
-        {/*
-          密钥一律来自进程环境变量，主进程只从 env 读、不接界面传入的 secret。
-          这里因此不再提供 Secret ID / Secret Key 输入框——填了也会被忽略，
-          摆两个能输入的框子只会让人误以为改这里就能换密钥。改密钥请改启动环境。
-        */}
+        {/* 密钥双通道：本页填写（加密存本机）或环境变量提供，环境变量优先；不回显明文。 */}
+        <SecretField
+          label="Secret ID"
+          hint="腾讯云控制台 → 访问密钥 → API 密钥管理"
+          value={secrets.TENCENT_ASR_SECRET_ID}
+          onChange={(v) => setSecrets({ ...secrets, TENCENT_ASR_SECRET_ID: v })}
+          stored={storedConfigured("TENCENT_ASR_SECRET_ID")}
+          fromEnv={envProvided("TENCENT_ASR_SECRET_ID")}
+          disabled={!credStatus?.available}
+        />
+        <SecretField
+          label="Secret Key"
+          hint="与 Secret ID 成对，保存后不回显"
+          value={secrets.TENCENT_ASR_SECRET_KEY}
+          onChange={(v) => setSecrets({ ...secrets, TENCENT_ASR_SECRET_KEY: v })}
+          stored={storedConfigured("TENCENT_ASR_SECRET_KEY")}
+          fromEnv={envProvided("TENCENT_ASR_SECRET_KEY")}
+          disabled={!credStatus?.available}
+        />
         <Field label="App ID" hint="腾讯云账号 APPID（公开信息，可在此修改后保存）">
           <input
             className="input"
@@ -196,8 +285,9 @@ export function SettingsPage() {
           <div style={{ marginTop: 8, fontSize: 13, color: asrMsg.ok ? tokens.ok : tokens.danger }}>{asrMsg.text}</div>
         ) : null}
         <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
-          密钥来源：环境变量 DSH_SECRET_TENCENT_ASR_SECRET_ID / DSH_SECRET_TENCENT_ASR_SECRET_KEY。
-          「测试连接」同样只使用环境里的密钥，界面无法查看或替换。
+          密钥可在本页填写（加密存本机，不回显、不入库明文），或由环境变量
+          DSH_SECRET_TENCENT_ASR_SECRET_ID / DSH_SECRET_TENCENT_ASR_SECRET_KEY 提供。
+          <b>环境变量优先级更高</b>，两者取其一即可。「测试连接」使用同一套取值逻辑。
         </div>
       </Panel>
 
@@ -209,22 +299,20 @@ export function SettingsPage() {
               <Badge tone="ok">已配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
                 {llmStatus.model} @ {llmStatus.baseUrl}
-                {llmFromEnv ? "（密钥来自环境变量）" : "（密钥来自本机数据库，建议改用环境变量）"}
+                 {llmStatus.model} @ {llmStatus.baseUrl}（{llmStatus.message ?? "已配置"}）
               </span>
             </>
           ) : (
             <>
               <Badge tone="dim">未配置</Badge>
               <span style={{ marginLeft: 8, color: tokens.textDim }}>
-                需要环境变量 DSH_SECRET_LLM_API_KEY，以及 Base URL 与模型名
+                 {llmStatus?.message ?? "需要 API Key，以及 Base URL 与模型名"}
               </span>
             </>
           )}
         </div>
-        {/*
-          与 ASR 同理：LLM 密钥同样只从环境变量读，主进程会忽略界面传入的 api_key。
-          这里不摆 API Key 输入框，只留公开配置（Base URL / 模型名）。
-        */}
+        {/* 密钥双通道：本页填写（加密存本机）或环境变量提供，环境变量优先；不回显明文。 */}
+        <SecretField label="API Key" hint="保存后不回显明文" value={secrets.LLM_API_KEY} onChange={(v) => setSecrets({ ...secrets, LLM_API_KEY: v })} stored={storedConfigured("LLM_API_KEY")} fromEnv={envProvided("LLM_API_KEY")} disabled={!credStatus?.available} />
         <Field label="Base URL" hint="例如 https://api.openai.com/v1 或其他兼容服务地址">
           <input className="input" value={llmBaseUrl} onChange={(e) => setLlmBaseUrl(e.target.value)} placeholder="https://…" />
         </Field>
@@ -238,7 +326,8 @@ export function SettingsPage() {
           <div style={{ marginTop: 8, fontSize: 13, color: llmMsg.ok ? tokens.ok : tokens.danger }}>{llmMsg.text}</div>
         ) : null}
         <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
-          密钥来源：环境变量 DSH_SECRET_LLM_API_KEY。「测试连接」只使用环境里的密钥，界面无法查看或替换。
+          API Key 可在本页填写（加密存本机，不回显、不入库明文），或由环境变量
+          DSH_SECRET_LLM_API_KEY 提供。<b>环境变量优先级更高</b>，两者取其一即可。
         </div>
       </Panel>
 
@@ -403,6 +492,33 @@ export function SettingsPage() {
         </div>
       </Panel>
 
+      <Panel title="密钥（加密存本机）">
+        {credStatus && !credStatus.available ? (
+          <div className="callout callout-warn" style={{ marginTop: 0, marginBottom: 10 }}>
+            ⚠ 当前系统不支持加密存储（Windows DPAPI / macOS Keychain / Linux 密钥环），
+            输入框已禁用以避免明文落盘。请改用环境变量启动本应用。
+          </div>
+        ) : null}
+        <div style={{ fontSize: 13, color: tokens.textDim, marginBottom: 10 }}>
+          在上面两个面板填写后点此保存。<b>留空表示不修改</b>——已存的值不会被空框覆盖。
+          保存后明文立即从内存中清空，界面只显示「已配置」，无法查看或导出。
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <Button variant="primary" onClick={doSaveCredentials} disabled={savingCred}>
+            {savingCred ? "保存中…" : "保存密钥"}
+          </Button>
+          <Button variant="danger" onClick={doClearCredentials} disabled={savingCred}>
+            清除本机凭证
+          </Button>
+          {credMsg ? <span className={credMsg.ok ? "toast-ok" : "toast-err"}>{credMsg.text}</span> : null}
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: tokens.textDim, lineHeight: 1.8 }}>
+          密文存于本机数据库，绑定当前系统账户（Windows 用 DPAPI，macOS 用 Keychain），
+          换机器或换账户后无法解密，会当作未配置。它防的是「明文落盘被随手看到」，
+          不防同账户下的其它程序；有环境变量时仍以环境变量为准。
+        </div>
+      </Panel>
+
       <Panel title="本地数据">
         <div style={{ fontSize: 13, color: tokens.textDim, marginBottom: 10 }}>
           所有数据（会话、转写、问题、设置）保存在本机 userData/live-monitor.db。删除会话会同时删除其转写与问题记录。
@@ -415,6 +531,52 @@ export function SettingsPage() {
         {msg ? <span className={msg.ok ? "toast-ok" : "toast-err"}>{msg.text}</span> : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * 密钥输入框：type="password"，永不回显明文。
+ * - 已存本机 → 显示「已配置…」，不要求重填
+ * - 环境变量已提供 → 禁用并标注（主进程 env 优先，填了也不生效）
+ * - 系统不支持加密 → 禁用，避免明文落盘
+ */
+function SecretField({
+  label,
+  hint,
+  value,
+  onChange,
+  stored,
+  fromEnv,
+  disabled,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  stored: boolean;
+  fromEnv: boolean;
+  disabled: boolean;
+}) {
+  const note = fromEnv
+    ? "由环境变量提供（优先级更高），此处填写不会生效"
+    : stored
+      ? "已配置（本机加密存储），留空则不修改"
+      : undefined;
+  return (
+    <Field label={label} hint={hint}>
+      <input
+        className="input"
+        type="password"
+        autoComplete="off"
+        value={value}
+        disabled={fromEnv || disabled}
+        placeholder={stored || fromEnv ? "••••••••（已配置）" : ""}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {note ? (
+        <div style={{ fontSize: 12, color: tokens.textDim, marginTop: 4 }}>{note}</div>
+      ) : null}
+    </Field>
   );
 }
 

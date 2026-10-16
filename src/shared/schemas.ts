@@ -8,13 +8,6 @@ export const AudioDeviceSchema = z.object({
 });
 export type AudioDevice = z.infer<typeof AudioDeviceSchema>;
 
-export const AppErrorSchema = z.object({
-  code: z.string(),
-  message: z.string(),
-  retryable: z.boolean(),
-  details: z.record(z.unknown()).optional(),
-});
-
 export const TranscriptSegmentSchema = z.object({
   id: z.string(),
   sessionId: z.string(),
@@ -25,33 +18,6 @@ export const TranscriptSegmentSchema = z.object({
   text: z.string(),
   isFinal: z.boolean(),
   createdAt: z.string(),
-});
-
-export const IssueSchema = z.object({
-  id: z.string(),
-  sessionId: z.string(),
-  analysisRunId: z.string(),
-  type: z.enum([
-    "bannedWord",
-    "absolutization",
-    "unverifiedClaim",
-    "repetition",
-    "pace",
-    "silence",
-    "frameworkStep",
-    "other",
-  ]),
-  severity: z.enum(["info", "warning", "critical"]),
-  startMs: z.number().int().nonnegative(),
-  endMs: z.number().int().nonnegative(),
-  segmentIds: z.array(z.string()),
-  quote: z.string().min(1),
-  basis: z.string().min(1),
-  recommendation: z.string().min(1),
-  suggestedScript: z.string().nullable(),
-  confidence: z.number().min(0).max(1),
-  needsReview: z.boolean(),
-  status: z.enum(["open", "acknowledged", "dismissed"]),
 });
 
 export const LlmIssueSchema = z.object({

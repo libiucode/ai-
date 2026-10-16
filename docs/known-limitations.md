@@ -191,12 +191,17 @@
 
 ### 4.2 密钥
 
-- 只从**进程环境变量**读取：`DSH_SECRET_TENCENT_ASR_SECRET_ID` / `DSH_SECRET_TENCENT_ASR_SECRET_KEY` / `DSH_SECRET_LLM_API_KEY`。
-- **不入库、不进日志、不进错误提示、不进导出报告**；界面不提供密钥输入框（产物实测 `PASSWORD_INPUTS=0`）。
+- **两条通道，环境变量优先**（2026-10-16 起）：① 设置页「密钥（加密存本机）」面板填写；② 进程环境变量 `DSH_SECRET_TENCENT_ASR_SECRET_ID` / `DSH_SECRET_TENCENT_ASR_SECRET_KEY` / `DSH_SECRET_LLM_API_KEY`。两者都提供时以环境变量为准。
+- 界面填写的密钥经 Electron `safeStorage` **加密后**存本机 SQLite（`credential_store_v1`）——Windows DPAPI、macOS Keychain、Linux 系统密钥环。原文明文不落盘。
+- **安全边界（重要，别把安全性说大了）**：加密解决的是「明文落在磁盘上被随手看到/被全文检索到」；它**不防**同机器同一账户下的其它程序（理论上可调用同样的系统接口解密），也不等于跨机器可用。换机器/换用户后密文无法解密，会当作未配置。
+- 系统加密不可用时**拒绝落盘**（宁可不存，也不存明文）。
+- 界面**不回显明文**：已配置显示 `••••••••`，环境变量已提供时显示来源并禁用输入；另有「清除本机凭证」。
+- **不进日志、不进错误提示、不进导出报告**；错误文本经 `redactSecrets()` 脱敏（`secretid`/`secret_key`/`api_key`/`authorization`/`token`/`signature`/`AKID*`/`sk-*`）。
 - 公开配置（APPID、base_url、model）可存设置页；`settings.get` 不回显历史敏感字段。
-- 错误文本经 `redactSecrets()` 脱敏（`secretid`/`secret_key`/`api_key`/`authorization`/`token`/`signature`/`AKID*`/`sk-*`）。
-- **不得**通过注册表、启动脚本或数据库注入密钥绕过环境变量。
-- ⚠️ **历史遗留的明文密钥记录未被清理**（运行链路已不读取）。
+
+> **变更说明**：本条 2026-10-16 前写的是「只从环境变量读取、界面不提供密钥输入框（产物实测 `PASSWORD_INPUTS=0`）」。该描述对该日期之前的版本成立，**对当前版本已失效**——输入框已加回（见上）。旧版痕迹保留在 `docs/desktop-verification.md`、`docs/incident-review.md` 等历史记录里，属当时的真实状态，不作回溯改写。
+
+- ⚠️ **历史遗留的明文密钥记录未被清理**（运行链路已不读取），且**不会自动迁移**到新加密通道——用户需在界面重填一次。
 
 ### 4.3 数据处理范围
 

@@ -1,13 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppEvents,
+  AsrStatusInfo,
+  CredentialKey,
+  CredentialSetResult,
+  CredentialStatusResult,
   EventListener,
+  LlmStatusInfo,
   StartSessionResult,
   SessionListResult,
   SessionDetailResult,
   ConnectionTestResult,
-  AsrStatusInfo,
-  LlmStatusInfo,
 } from "../shared/api";
 import type {
   AudioDevice,
@@ -78,6 +81,14 @@ const api = {
   getSettings: () => ipcRenderer.invoke(IpcChannels.settingsGet) as Promise<Settings>,
   saveSettings: (settings: Settings) =>
     ipcRenderer.invoke(IpcChannels.settingsSave, settings) as Promise<boolean>,
+  // 凭证：界面填写后由主进程用系统钥匙串加密存本机（不存明文、不回显）。
+  // 环境变量优先级更高，主进程读取时 env 优先于本机密文。
+  setCredential: (key: CredentialKey, value: string) =>
+    ipcRenderer.invoke("credential.set", { key, value }) as Promise<CredentialSetResult>,
+  credentialStatus: () =>
+    ipcRenderer.invoke("credential.status") as Promise<CredentialStatusResult>,
+  clearCredentials: () =>
+    ipcRenderer.invoke("credential.clear") as Promise<CredentialSetResult>,
   exportReport: (sessionId: string, format: ReportFormat) =>
     ipcRenderer.invoke(IpcChannels.reportExport, sessionId, format) as Promise<string>,
   listSessions: () =>

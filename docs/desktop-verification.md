@@ -83,11 +83,13 @@
 
 产物实测字段：`App ID`、`Base URL`、`模型名`、`分析间隔`、`分析窗口`、`请求超时（毫秒）`、`单场预算上限`。
 
+> **本节记录的是 2026-10-16 之前的状态，已被后续改造覆盖。** 当前版本密钥走**双通道**（界面填写 + 环境变量），详见 `README.md`「安全凭证」一节。以下原文保留，用于回溯当时的实测结论，**不要据此推翻当前实现**。
+
 本次按安全要求改造（仅 renderer 范围）：
 
-- **删除** Secret ID / Secret Key / API Key 三个输入框。产物实测 `PASSWORD_INPUTS=0`。
+- **删除** Secret ID / Secret Key / API Key 三个输入框。产物实测 `PASSWORD_INPUTS=0`。**（2026-10-16 已加回，并改为 `safeStorage` 加密存储）**
 - 密钥一律来自进程环境变量（`DSH_SECRET_TENCENT_ASR_SECRET_ID/KEY`、`DSH_SECRET_LLM_API_KEY`），
-  主进程只从 env 读，界面无法查看或替换。
+  主进程只从 env 读，界面无法查看或替换。**（同上，已改为双通道）**
 - 连接测试统一走 `{ useStored: true }`，不再传手填密钥。
 - 保存只写公开配置（App ID / Base URL / 模型名），密钥字段剥离，不落盘、不进 settings 表。
 - 状态区按 source 显示：环境变量 → "密钥来自环境变量"；旧库配置 → 提示建议改用环境变量。

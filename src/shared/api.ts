@@ -77,6 +77,10 @@ export interface WindowApi {
   saveFramework(framework: Framework): Promise<boolean>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<boolean>;
+  /** 凭证：界面填写，加密存本机。环境变量优先级更高。 */
+  setCredential(key: CredentialKey, value: string): Promise<CredentialSetResult>;
+  credentialStatus(): Promise<CredentialStatusResult>;
+  clearCredentials(): Promise<CredentialSetResult>;
   exportReport(sessionId: string, format: ReportFormat): Promise<string>;
   listSessions(): Promise<SessionListResult>;
   getSessionDetail(sessionId: string): Promise<SessionDetailResult>;
@@ -90,9 +94,30 @@ export interface WindowApi {
 
 /**
  * 配置来源。'environment' 表示凭证由进程环境变量提供（不入库、不可在界面修改）；
- * 'storage' 表示来自本地数据库。密钥一律不回传给渲染层，这里只标来源。
+ * 'storage' 表示来自本地数据库（密钥经系统钥匙串加密）。
+ * 密钥一律不回传给渲染层，这里只标来源。
  */
 export type ConfigSource = "environment" | "storage";
+
+/** 凭证键：界面可写这三个，主进程读取时环境变量优先。 */
+export type CredentialKey =
+  | "TENCENT_ASR_SECRET_ID"
+  | "TENCENT_ASR_SECRET_KEY"
+  | "LLM_API_KEY";
+
+export interface CredentialSetResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface CredentialStatusResult {
+  /** 当前系统是否支持加密存储（Windows DPAPI / macOS Keychain / Linux 密钥环）。 */
+  available: boolean;
+  /** 本机是否已存该凭证（不回显明文）。 */
+  configured: Record<CredentialKey, boolean>;
+  /** 环境变量里是否提供了该凭证。 */
+  fromEnv: Record<CredentialKey, boolean>;
+}
 
 export interface AsrStatusInfo {
   configured: boolean;

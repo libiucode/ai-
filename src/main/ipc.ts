@@ -17,11 +17,23 @@ import { buildReportSummary, buildHtmlReport } from "./report/reportBuilder";
 import fs from "node:fs";
 import path from "node:path";
 import { readRuntimeAsrConfig, readRuntimeLlmConfig, withoutCredentials, diagnoseAsrConfig, diagnoseLlmConfig } from "./security/runtimeConfig";
+import {
+  setCredential,
+  hasCredential,
+  clearCredentials,
+  credentialStorageAvailable,
+  type CredentialKey,
+} from "./security/credentialStore";
+
+/** 凭证键白名单：界面只能写这三个，避免被塞进任意 key。 */
+function isCredentialKey(v: string): v is CredentialKey {
+  return v === "TENCENT_ASR_SECRET_ID" || v === "TENCENT_ASR_SECRET_KEY" || v === "LLM_API_KEY";
+}
 
 /** Session-scoped test adapter so connect tests never touch the live orchestrator ASR. */
 let testAsr: TencentAsrAdapter | null = null;
 
-/** Compatibility names: public options are saved; credentials come only from env. */
+/** 读取生效配置：公开配置存 SQLite，密钥走「环境变量 > 本机密文」双通道。 */
 export function readStoredAsrConfig(store: Store): AsrConfig | null {
   return readRuntimeAsrConfig(store);
 }
@@ -229,6 +241,57 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
       credentialPresent: diag.credentialPresent,
       message: diag.message,
     };
+  });
+
+  // ---- 凭证存储（界面填写，加密存本机；环境变量优先级更高） ----
+  //
+  // 设计取舍：早期版本只允许环境变量，结果双击图标启动的普通用户无从配置。
+  // 这里补上界面入口，但密文仍不落明文，且环境变量优先，便于 CI 覆盖。
+
+  ipcMain.handle("credential.set", async (_e, input: unknown) => {
+    const obj = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+    const key = String(obj.key ?? "");
+    const value = String(obj.value ?? "");
+    if (!isCredentialKey(key)) return { ok: false, message: "未知的凭证键" };
+    const ok = setCredential(store, key, value);
+    return {
+      ok,
+      message: ok
+        ? "凭证已加密保存（绑定本机当前用户账户）"
+        : "当前系统不支持加密存储，未保存。请改用环境变量启动。",
+    };
+  });
+
+  ipcMain.handle("credential.status", async () => {
+    if (!credentialStorageAvailable()) {
+      return {
+        available: false,
+        configured: { TENCENT_ASR_SECRET_ID: false, TENCENT_ASR_SECRET_KEY: false, LLM_API_KEY: false },
+        fromEnv: {
+          TENCENT_ASR_SECRET_ID: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID),
+          TENCENT_ASR_SECRET_KEY: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY),
+          LLM_API_KEY: Boolean(process.env.DSH_SECRET_LLM_API_KEY),
+        },
+      };
+    }
+    return {
+      available: true,
+      configured: {
+        TENCENT_ASR_SECRET_ID: hasCredential(store, "TENCENT_ASR_SECRET_ID"),
+        TENCENT_ASR_SECRET_KEY: hasCredential(store, "TENCENT_ASR_SECRET_KEY"),
+        LLM_API_KEY: hasCredential(store, "LLM_API_KEY"),
+      },
+      fromEnv: {
+        TENCENT_ASR_SECRET_ID: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_ID),
+        TENCENT_ASR_SECRET_KEY: Boolean(process.env.DSH_SECRET_TENCENT_ASR_SECRET_KEY),
+        LLM_API_KEY: Boolean(process.env.DSH_SECRET_LLM_API_KEY),
+      },
+    };
+  });
+
+  ipcMain.handle("credential.clear", async () => {
+    clearCredentials(store);
+    return { ok: true, message: "已清除本机保存的凭证（环境变量不受影响）" };
   });
 
   // ---- connection tests (session-scoped, never touch the live session) ----

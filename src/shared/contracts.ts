@@ -50,13 +50,6 @@ export interface SpeechInterval {
   endMs: number;
 }
 
-export interface AnalysisWindow {
-  id: string;
-  sessionId: string;
-  startMs: number;
-  endMs: number;
-}
-
 export type AnalysisRunStatus =
   | "success"
   | "timeout"
