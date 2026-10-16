@@ -163,4 +163,31 @@ describe("框架事实冲突：从转写到问题落库（端到端）", () => {
     expect(types).toContain("frameworkConflict");
     expect(types).toContain("absolutization"); // 「所有肤质」触发既有规则
   });
+
+  it("E7 法定违规表述（statutory）落库为 critical + needs_review", async () => {
+    // 「假一赔十」是完整固定短语，误报风险为零（见 tests/ruleEngine-confidence.test.ts），
+    // 故与禁用词同级定级 critical；但仍不认定违法，保留人工复核。
+    const { store, orch, dir } = setup("", [
+      { id: "seg-1", text: "今天这场是品牌专场，支持专柜验货，假一赔十。", startMs: 0, endMs: 5000 },
+    ]);
+    resources.push({ store, dir, orch });
+    await runWindow(orch, 0, 60000);
+    const issues = store.listIssues("sess-fact");
+    const hit = issues.find((i) => i.quote === "假一赔十");
+    expect(hit).toBeDefined();
+    expect(hit!.severity).toBe("critical");
+    expect(hit!.needs_review).toBe(1);
+  });
+
+  it("E8 宽泛模式（broad）仍为 warning + 不强制复核（避免淹没真正该改的）", async () => {
+    const { store, orch, dir } = setup("", [
+      { id: "seg-1", text: "这款产品保证有效", startMs: 0, endMs: 5000 },
+    ]);
+    resources.push({ store, dir, orch });
+    await runWindow(orch, 0, 60000);
+    const hit = store.listIssues("sess-fact").find((i) => i.quote === "保证");
+    expect(hit).toBeDefined();
+    expect(hit!.severity).toBe("warning");
+    expect(hit!.needs_review).toBe(0);
+  });
 });

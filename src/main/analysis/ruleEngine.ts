@@ -20,43 +20,88 @@ export interface RuleHit {
    * 注意这与「数字被截断」是两件事：截断的命中已被丢弃（见 matchRules）。
    */
   numeralNormalized?: boolean;
+  /**
+   * 本条命中的确定度（仅默认规则可能带；用户自配的框架规则不带）。
+   *
+   * ⚠️ **只在 `statutory` 时赋值**。`broad` 命中保持对象形状与改造前逐字节一致，
+   * 这是刻意的：既有测试大量使用整体 `toEqual` 断言（如
+   * `tests/ruleEngine-numerals.test.ts`、`tests/ruleEngine-triggers.test.ts`），
+   * 给所有命中都加字段会无差别地让它们变红——而那些断言本身是对的。
+   * 同 `numeralNormalized` 的既有做法。
+   */
+  confidence?: RuleConfidence;
 }
 
-const DEFAULT_ABSOLUTIZATION_PATTERNS = [
-  "保证",
-  "绝对",
-  "百分之百",
-  "100%",
-  "七天见效",
-  "肯定有效",
-  "一定见效",
+/**
+ * 默认规则的确定度分级。
+ *
+ * - `statutory`：法定违规表述。该短语本身就是完整、自足的违法宣称，
+ *   不存在「正常话术恰好包含它」的用法。误报风险经实测为零（见
+ *   docs/plan-rule-confidence-tiering.md §4.3：42 条真实直播风格正常话术上
+ *   命中 1 条，且那 1 条是真违规）。
+ * - `broad`：宽泛模式，如「保证」「绝对」。正常话术也会用到，
+ *   必须保持「宁漏勿误报」，命中只作为候选。
+ *
+ * ⚠️ 未显式标注的一律按 broad 处理——保守是默认值。
+ */
+type RuleConfidence = "statutory" | "broad";
+
+interface DefaultPattern {
+  pattern: string;
+  confidence: RuleConfidence;
+}
+
+const DEFAULT_ABSOLUTIZATION_PATTERNS: DefaultPattern[] = [
+  { pattern: "保证", confidence: "broad" },
+  { pattern: "绝对", confidence: "broad" },
+  { pattern: "百分之百", confidence: "broad" },
+  { pattern: "100%", confidence: "broad" },
+  { pattern: "七天见效", confidence: "broad" },
+  { pattern: "肯定有效", confidence: "broad" },
+  { pattern: "一定见效", confidence: "broad" },
   // 第①级真实转写暴露的遗漏：承诺类与全称量词
   // 注意：此处覆盖「所有人」，不再单列字面「所有人」，避免同一处双命中。
-  "所有(?:肤质|肌肤|人群|宝宝|人)",
-  "(?:没有|无)任何(?:刺激|副作用|添加|不适)",
-  "放心(?:食用|口服)",
-  "全网最(?:低|好|便宜|划算)",
-  "(?:国家|世界|全球)级",
+  { pattern: "所有(?:肤质|肌肤|人群|宝宝|人)", confidence: "broad" },
+  { pattern: "(?:没有|无)任何(?:刺激|副作用|添加|不适)", confidence: "broad" },
+  { pattern: "放心(?:食用|口服)", confidence: "broad" },
+  { pattern: "全网最(?:低|好|便宜|划算)", confidence: "broad" },
+  { pattern: "(?:国家|世界|全球)级", confidence: "broad" },
+  // ---- 法定违规表述（statutory）：本短语即完整、自足的违法宣称 ----
+  // 入选门槛见 docs/plan-rule-confidence-tiering.md §3.1（自足性 / 无正常用法 / 实测零反例）。
+  // 每条的反例分析与残留风险见同文 §4.4 与 §5。
+  { pattern: "假一赔[十百千万亿\\d]+", confidence: "statutory" },
+  { pattern: "药到病除", confidence: "statutory" },
+  { pattern: "包治百病", confidence: "statutory" },
+  { pattern: "纯天然", confidence: "statutory" },
+  { pattern: "纯植物", confidence: "statutory" },
+  { pattern: "纯中药", confidence: "statutory" },
+  { pattern: "无副作用", confidence: "statutory" },
+  { pattern: "零添加", confidence: "statutory" },
+  { pattern: "明星同款", confidence: "statutory" },
+  { pattern: "医生推荐", confidence: "statutory" },
 ];
 
-const DEFAULT_UNVERIFIED_PATTERNS = [
-  "原价\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?",
-  "(?:优惠|减免|直降)\\s*\\d+(?:\\.\\d+)?",
-  "(?:只要|只卖|现价)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?",
-  "\\d+(?:\\.\\d+)?\\s*折",
-  "(?:提升|改善|减少|降低|有效率)\\s*\\d+(?:\\.\\d+)?\\s*[%％]",
-  "(?:瘦|减重)\\s*\\d+(?:\\.\\d+)?\\s*(?:斤|公斤|千克)",
-  "(?:保温|保冷)(?:达到|长达|可达)?\\s*\\d+(?:\\.\\d+)?\\s*小时",
-  "只剩\\d+",
-  "今天最?低价",
-  "政府认证",
-  "获得.*奖项",
-  "销量第一",
+const DEFAULT_UNVERIFIED_PATTERNS: DefaultPattern[] = [
+  { pattern: "原价\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?", confidence: "broad" },
+  { pattern: "(?:优惠|减免|直降)\\s*\\d+(?:\\.\\d+)?", confidence: "broad" },
+  { pattern: "(?:只要|只卖|现价)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?", confidence: "broad" },
+  { pattern: "\\d+(?:\\.\\d+)?\\s*折", confidence: "broad" },
+  { pattern: "(?:提升|改善|减少|降低|有效率)\\s*\\d+(?:\\.\\d+)?\\s*[%％]", confidence: "broad" },
+  { pattern: "(?:瘦|减重)\\s*\\d+(?:\\.\\d+)?\\s*(?:斤|公斤|千克)", confidence: "broad" },
+  { pattern: "(?:保温|保冷)(?:达到|长达|可达)?\\s*\\d+(?:\\.\\d+)?\\s*小时", confidence: "broad" },
+  { pattern: "只剩\\d+", confidence: "broad" },
+  { pattern: "今天最?低价", confidence: "broad" },
+  { pattern: "政府认证", confidence: "broad" },
+  { pattern: "获得.*奖项", confidence: "broad" },
+  { pattern: "销量第一", confidence: "broad" },
   // 第①级真实转写暴露的遗漏：比价、效果期限、即时效果、成分配比
-  "(?:平时|专柜|官网|官方|旗舰店)[^。，,！!？?]{0,8}(?:都)?(?:要|卖|是)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?\\s*(?:多)?",
-  "(?:坚持|连续)(?:用|使用|喝|吃|涂抹)?\\s*\\d+\\s*(?:天|周|月)",
-  "第[一二三四五六七八九十\\d]+天[^。，,！!？?]{0,6}(?:就|便)",
-  "浓度\\s*\\d+(?:\\.\\d+)?\\s*[%％]",
+  { pattern: "(?:平时|专柜|官网|官方|旗舰店)[^。，,！!？?]{0,8}(?:都)?(?:要|卖|是)\\s*[¥￥]?\\s*\\d+(?:\\.\\d+)?\\s*(?:多)?", confidence: "broad" },
+  { pattern: "(?:坚持|连续)(?:用|使用|喝|吃|涂抹)?\\s*\\d+\\s*(?:天|周|月)", confidence: "broad" },
+  { pattern: "第[一二三四五六七八九十\\d]+天[^。，,！!？?]{0,6}(?:就|便)", confidence: "broad" },
+  { pattern: "浓度\\s*\\d+(?:\\.\\d+)?\\s*[%％]", confidence: "broad" },
+  // ---- 未核实宣称中的法定表述（statutory） ----
+  // 「械字号」是注册证号类别，主播说它 = 声称产品是医疗器械，属明确的事实性宣称。
+  { pattern: "械字号", confidence: "statutory" },
 ];
 
 /**
@@ -147,14 +192,14 @@ export function matchRules(
   input: RuleEngineInput,
 ): RuleHit[] {
   const hits: RuleHit[] = [];
-  const patterns: Array<{ type: FrameworkRule["ruleType"]; pattern: string; id: string; stepId?: string | null }> = [];
+  const patterns: Array<{ type: FrameworkRule["ruleType"]; pattern: string; id: string; stepId?: string | null; confidence?: RuleConfidence }> = [];
 
   // defaults
   for (const p of DEFAULT_ABSOLUTIZATION_PATTERNS) {
-    patterns.push({ type: "absolutization", pattern: p, id: `default:abs:${p}` });
+    patterns.push({ type: "absolutization", pattern: p.pattern, id: `default:abs:${p.pattern}`, confidence: p.confidence });
   }
   for (const p of DEFAULT_UNVERIFIED_PATTERNS) {
-    patterns.push({ type: "unverifiedClaim", pattern: p, id: `default:unv:${p}` });
+    patterns.push({ type: "unverifiedClaim", pattern: p.pattern, id: `default:unv:${p.pattern}`, confidence: p.confidence });
   }
 
   // framework rules
@@ -210,6 +255,8 @@ export function matchRules(
         stepId: p.stepId ?? null,
         matchedText: quote,
         ...(numeralNormalized ? { numeralNormalized: true } : {}),
+        // 仅 statutory 赋值：broad 命中保持对象形状与改造前一致（见 RuleHit 注释）。
+        ...(p.confidence === "statutory" ? { confidence: "statutory" as const } : {}),
       });
       if (m.index === re.lastIndex) re.lastIndex++;
     }

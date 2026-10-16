@@ -767,7 +767,10 @@ export class SessionOrchestrator {
             sessionId,
             analysisRunId: runId,
             type: hit.ruleType as Issue["type"],
-            severity: hit.ruleType === "bannedWord" ? "critical" : "warning",
+            // 法定违规表述（statutory）与禁用词同级，因为该短语本身就是完整自足的
+            // 违法宣称；宽泛模式仍为 warning，避免淹没真正该立刻改的那条。
+            // 依据见 docs/plan-rule-confidence-tiering.md §2.3。
+            severity: hit.ruleType === "bannedWord" || hit.confidence === "statutory" ? "critical" : "warning",
             startMs: seg.startMs,
             endMs: seg.endMs,
             segmentIds: [seg.id],
@@ -776,7 +779,9 @@ export class SessionOrchestrator {
             recommendation: "主播应立即调整表达，替换为合规说法",
             suggestedScript: null,
             confidence: 0.95,
-            needsReview: hit.ruleType === "unverifiedClaim",
+            // 法定违规表述是自足事实（「假一赔十」说了就是说了），但仍不认定违法——
+            // 按 known-limitations §3.8「规则命中只是风险候选」保留人工复核。
+            needsReview: hit.ruleType === "unverifiedClaim" || hit.confidence === "statutory",
             status: "open",
           });
         }
