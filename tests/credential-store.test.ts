@@ -42,6 +42,7 @@ import {
   setCredential,
   storageMode,
   clearCredentials,
+  wouldDowngradeCiphertext,
 } from "../src/main/security/credentialStore";
 
 /** 最小内存 store，行为与 Store 的 settings 读写一致。 */
@@ -135,6 +136,62 @@ describe("凭证存储：加密不可用时的降级明文（2026-10-16 策略�
     expect(setCredential(s, "LLM_API_KEY", "survives")).toBe(true);
     expect(getCredential(s, "LLM_API_KEY")).toBe("survives");
     expect(isPlaintextCredential(s, "LLM_API_KEY")).toBe(true);
+  });
+});
+
+describe("不可逆降级保护（2026-10-16，由 DPAPI 调查结论触发）", () => {
+  it("已有密文 + 当前加密不可用 → 拒绝写入，不销毁密文", () => {
+    const s = memStore();
+    enc.available = true;
+    setCredential(s, "LLM_API_KEY", "original-cipher-value");
+    const before = s.getSetting("credential_store_v1");
+
+    // 模拟「某次运行处于 pre-ready / 纯 Node 环境」：加密不可用
+    enc.available = false;
+    expect(wouldDowngradeCiphertext(s, "LLM_API_KEY")).toBe(true);
+    // 关键断言：返回 false 且**库里内容一个字节都没变**
+    expect(setCredential(s, "LLM_API_KEY", "new-value")).toBe(false);
+    expect(s.getSetting("credential_store_v1")).toBe(before);
+
+    // 加密恢复后，原密文仍能正常解出
+    enc.available = true;
+    expect(getCredential(s, "LLM_API_KEY")).toBe("original-cipher-value");
+  });
+
+  it("已有明文 + 加密不可用 → 允许覆盖（不涉及密文销毁）", () => {
+    const s = memStore();
+    enc.available = false;
+    setCredential(s, "LLM_API_KEY", "plain-old");
+    expect(wouldDowngradeCiphertext(s, "LLM_API_KEY")).toBe(false);
+    expect(setCredential(s, "LLM_API_KEY", "plain-new")).toBe(true);
+    expect(getCredential(s, "LLM_API_KEY")).toBe("plain-new");
+  });
+
+  it("加密可用时允许覆盖旧密文（正常轮换密钥）", () => {
+    const s = memStore();
+    setCredential(s, "LLM_API_KEY", "v1");
+    expect(wouldDowngradeCiphertext(s, "LLM_API_KEY")).toBe(false);
+    expect(setCredential(s, "LLM_API_KEY", "v2")).toBe(true);
+    expect(getCredential(s, "LLM_API_KEY")).toBe("v2");
+  });
+
+  it("清除不受降级保护限制（用户显式要求删除）", () => {
+    const s = memStore();
+    setCredential(s, "LLM_API_KEY", "cipher");
+    enc.available = false;
+    // 空值 = 清除，必须允许——否则用户被锁死在「既不能改也不能删」
+    expect(setCredential(s, "LLM_API_KEY", "")).toBe(true);
+    expect(hasCredential(s, "LLM_API_KEY")).toBe(false);
+  });
+
+  it("加密接口在但抛错时，同样不覆盖已有密文", () => {
+    const s = memStore();
+    enc.available = true;
+    setCredential(s, "LLM_API_KEY", "keep-me");
+    const before = s.getSetting("credential_store_v1");
+    enc.encryptThrows = true;
+    expect(setCredential(s, "LLM_API_KEY", "attempt")).toBe(false);
+    expect(s.getSetting("credential_store_v1")).toBe(before);
   });
 });
 

@@ -22,6 +22,7 @@ import {
   hasCredential,
   isPlaintextCredential,
   storageMode,
+  wouldDowngradeCiphertext,
   clearCredentials,
   credentialStorageAvailable,
   type CredentialKey,
@@ -255,10 +256,19 @@ export function registerIpc(store: Store, orchestrator: SessionOrchestrator) {
     const key = String(obj.key ?? "");
     const value = String(obj.value ?? "");
     if (!isCredentialKey(key)) return { ok: false, message: "未知的凭证键" };
+    // 先判「会不会毁掉已有密文」：这是不可逆操作，必须在失败时给出可执行说明，
+    // 否则用户只看到「保存失败」而不知道自己的加密凭证正被保护着。
+    const wouldDowngrade = wouldDowngradeCiphertext(store, key);
     const ok = setCredential(store, key, value);
     if (!ok) {
-      // 走到这里说明连降级明文写入都失败了（凭据存储彻底不可用）。
-      return { ok: false, message: "凭证保存失败：本机凭据存储不可用，请检查数据库写入权限。" };
+      return {
+        ok: false,
+        message: wouldDowngrade
+          ? "本机系统加密当前不可用（常见原因：应用尚未完成启动，或运行在无图形会话/CI 环境），" +
+            "若此刻保存会把已有的加密凭证**不可逆地降级为明文**，故已拒绝。" +
+            "请重启应用后再试，或先用「清除本机凭证」显式清除后重填。"
+          : "凭证保存失败：本机凭据存储不可用，请检查数据库写入权限。",
+      };
     }
     return {
       ok: true,

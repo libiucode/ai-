@@ -102,10 +102,19 @@ export function storageMode(): CredentialStorageMode {
  * 加密可用 → 存密文；不可用 → 降级存明文（带 `PLAIN_PREFIX` 标记），
  * **不再拒绝落盘**。详见文件头的「降级明文存储」说明。
  *
- * 注意：加密可用时会**无条件覆盖**同键的旧明文（`next[key] = 密文`），
- * 因此系统加密一旦恢复，用户下次保存即自动升格为密文。
+ * ## ⚠️ 不可逆降级保护（2026-10-16，由 DPAPI 调查结论触发）
  *
- * 空值视为清除该键。
+ * 若某次运行处于「加密不可用」（典型来源：**在 `app.whenReady()` 之前调用**——
+ * 实测该状态下 `isEncryptionAvailable()` 恒为 false，见
+ * `scripts/probe-dpapi-timing.js`；以及 `ELECTRON_RUN_AS_NODE=1` 的纯 Node 环境、
+ * CI / 无头自动化），此时若用户重新保存，**明文会覆盖掉原本可用的密文**，
+ * 且不可逆——用户以为「只是改了个 key」，实际把它从加密降级成了明文。
+ *
+ * 因生产环境库路径稳定（`app.getPath("userData")`），这会真实命中用户的库。
+ * 故此处加一道闸：**旧值已是密文、而当前加密不可用时，拒绝用明文覆盖**，
+ * 返回 false 并把原因交给调用方呈现。用户仍可通过「清除本机凭证」显式重来。
+ *
+ * 空值视为清除该键（清除不受此闸限制——用户显式要求删）。
  */
 export function setCredential(
   store: { getSetting(key: string): string | null; setSetting(key: string, value: string): void },
@@ -119,22 +128,42 @@ export function setCredential(
     writeRaw(store, next);
     return true;
   }
+  const existingRaw = next[key];
+  const existingIsCiphertext = Boolean(existingRaw && !existingRaw.startsWith(PLAIN_PREFIX));
   if (credentialStorageAvailable()) {
     try {
       next[key] = safeStorage.encryptString(trimmed).toString("base64");
       writeRaw(store, next);
       return true;
     } catch {
-      // 加密接口存在但调用失败（少见：DPAPI 被策略中途禁用）。
-      // 不静默丢数据，也不静默降级——走下面的明文分支，但由 storageMode 如实上报。
+      // 加密接口在但调用失败（DPAPI 被策略中途禁用等）。
+      // 同样受降级保护约束：不覆盖已有密文。
+      if (existingIsCiphertext) return false;
       next[key] = PLAIN_PREFIX + trimmed;
       writeRaw(store, next);
       return true;
     }
   }
+  // 加密不可用。已有密文时拒绝降级覆盖（见上方注释）。
+  if (existingIsCiphertext) return false;
   next[key] = PLAIN_PREFIX + trimmed;
   writeRaw(store, next);
   return true;
+}
+
+/**
+ * 判断写入是否会被「不可逆降级保护」拒绝。
+ *
+ * 调用方（IPC / 界面）据此给出可执行的说明，而不是笼统的「保存失败」——
+ * 用户需要知道的是「这会破坏你已有的加密凭证」，而不是「出错了」。
+ */
+export function wouldDowngradeCiphertext(
+  store: { getSetting(key: string): string | null },
+  key: CredentialKey,
+): boolean {
+  if (credentialStorageAvailable()) return false;
+  const raw = readRaw(store)[key];
+  return Boolean(raw && !raw.startsWith(PLAIN_PREFIX));
 }
 
 /**

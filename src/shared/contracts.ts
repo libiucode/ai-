@@ -75,6 +75,14 @@ export type IssueType =
   | "pace"
   | "silence"
   | "frameworkStep"
+  /**
+   * 与话术框架声明的商品事实冲突（框架写「保温12小时」，主播说「保温24小时」）。
+   *
+   * 与 `unverifiedClaim` 的区别：后者是「这句话本身有风险」，
+   * 前者是「这句话与已核实事实不符」——性质不同，前者需要框架里有对应事实才会产生。
+   * 由 `analysis/factCheck.ts` 本地确定性判定，不依赖 LLM。
+   */
+  | "frameworkConflict"
   | "other";
 
 export type IssueSeverity = "info" | "warning" | "critical";

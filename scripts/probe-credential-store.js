@@ -10,6 +10,22 @@
  *
  * ⚠️ 只操作临时数据库，不碰 %APPDATA% 下的用户真实库。
  * ⚠️ 不打印任何密钥值（用的是明显假的占位串）。
+ *
+ * ⚠️⚠️ 必须在 app.whenReady() 之后再读 safeStorage（2026-10-16 修正）
+ *
+ * 本脚本初版在 `require("electron")` 之后**立即**调用 isEncryptionAvailable()，
+ * 得到 false，并据此得出「本机 DPAPI 不可用、客户也配不了密钥」的结论——
+ * **那个结论是错的**。
+ *
+ * 实测（scripts/probe-dpapi-window.js）：
+ *     [+   1ms] 首条语句       -> false  ready=false
+ *     [+  41ms] 忙等 40ms 内调用 204166 次，最后一次 -> false  ready=false
+ *     [+ 102ms] ready 之后     -> true   ready=true
+ * 40ms 内 20 万次调用无一例外 false，唯一跳变点是 app ready。
+ * 即：**在 ready 之前取值恒为 false，与 DPAPI 是否可用无关**。
+ *
+ * 生产代码路径不受影响：src/main/index.ts 在 whenReady 内建库，
+ * ipc.ts 的凭证 handler 必然晚于 ready。
  */
 const fs = require("node:fs");
 const os = require("node:os");
@@ -19,11 +35,18 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cred-real-"));
 const dbPath = path.join(dir, "probe.db");
 
 async function main() {
-  const { safeStorage } = require("electron");
+  const { safeStorage, app } = require("electron");
+
+  // 关键：等 ready。这里等待的是「真实应用所处的阶段」，
+  // 不是为了让测试通过而绕过问题——生产代码确实在这个阶段之后才读写凭证。
+  await app.whenReady();
+  console.log("[0] app ready =", app.isReady());
+
   const Database = require("D:/ai盯播工具/app/node_modules/better-sqlite3");
 
   const avail = safeStorage.isEncryptionAvailable();
   console.log("[1] isEncryptionAvailable() =", avail);
+  console.log("[1b] 若为 true，说明本机 DPAPI 正常（初版脚本报 false 是取值时机错误）");
 
   // 用真实 Store + 真实 credentialStore 模块（编译产物）
   const { Store } = require("D:/ai盯播工具/app/dist/main/main/storage/store.js");
@@ -52,6 +75,7 @@ async function main() {
   store.close();
   fs.rmSync(dir, { recursive: true, force: true });
   console.log("[9] 临时库已清理，未触碰用户真实库");
+  app.exit(0);
 }
 
 main().catch((e) => { console.error("FATAL", e); process.exit(1); });

@@ -200,6 +200,7 @@ export const TYPE_LABEL: Record<string, string> = {
   pace: "语速异常",
   silence: "长时间静音",
   frameworkStep: "话术步骤缺失",
+  frameworkConflict: "与框架事实不符",
   other: "其他",
 };
 

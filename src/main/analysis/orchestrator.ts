@@ -8,6 +8,7 @@ import { computeMetrics, detectSpeechIntervals } from "./metrics";
 import { issueDedupeKey } from "./deduplicate";
 import { readRuntimeAsrConfig, readRuntimeLlmConfig } from "../security/runtimeConfig";
 import { matchRules, ScriptLoopState } from "./ruleEngine";
+import { parseFactAssertions, compareSegmentsAgainstFacts } from "./factCheck";
 import { LlmClient, type VerifiedAnalysisResult } from "./llmClient";
 import { PcmResamplerSlicer, PACKET_MS, type AudioPacket } from "../capture/pcm";
 import type {
@@ -781,6 +782,51 @@ export class SessionOrchestrator {
         }
       }
       // Silence remains an objective VAD metric; do not fabricate quotation evidence.
+
+      // ---- 框架「一致性比对」通道 A：数值断言核对（本地，确定性） ----
+      //
+      // 与上面的规则命中是**不同性质**的问题：
+      //   规则命中 = 「这句话里有风险表述」（绝对化、未核实宣称）
+      //   事实冲突 = 「这句话与框架声明的事实不符」（框架写12小时、主播说24小时）
+      // 后者是领导原话「和给定的话术框架进行比对，找出问题」的直接落点，
+      // 且可确定性判定（12 ≠ 24），不依赖 LLM。
+      //
+      // 处置纪律：本通道默认不报，只有「同量纲 + 数值不同 + 非对比语境 + 非服务条款」
+      // 才产出冲突。反例见 tests/fact-check.test.ts。
+      const factAssertions = framework ? parseFactAssertions(framework.productFacts) : [];
+      if (factAssertions.length) {
+        for (const conflict of compareSegmentsAgainstFacts(
+          segments.map((s) => ({ id: s.id, text: s.text })),
+          factAssertions,
+        )) {
+          const seg = segments.find((s) => s.id === conflict.segmentId);
+          if (!seg) continue;
+          const id = crypto.randomUUID();
+          issueSteps.set(id, null);
+          issues.push({
+            id,
+            sessionId,
+            analysisRunId: runId,
+            type: "frameworkConflict",
+            // 与框架不符 ≠ 违规。定级 warning，把「是否严重」留给用户判断。
+            severity: "warning",
+            startMs: seg.startMs,
+            endMs: seg.endMs,
+            segmentIds: [seg.id],
+            // quote 逐字来自原文（factCheck 保证），走既有证据门禁
+            quote: conflict.quote,
+            basis:
+              `与话术框架声明的商品事实不符：框架写「${conflict.fact.raw}」，` +
+              `主播口播「${conflict.quote}」。`,
+            recommendation: "请核对该参数的准确数值，按已核实事实修正口播表述。",
+            suggestedScript: null,
+            // 数值冲突本身可确定，但「框架那条事实是否写对」无从判断，故标需人工核查。
+            confidence: 0.9,
+            needsReview: true,
+            status: "open",
+          });
+        }
+      }
 
       const persisted: Issue[] = [];
       for (const issue of issues) {
