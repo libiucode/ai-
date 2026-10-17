@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -202,7 +202,7 @@ describe("报告侧：标定状态必须如实标注", () => {
 });
 
 describe("会话结束时自动落库标定因子（端到端）", () => {
-  it("stop() 后 sessions.audio_clock_ratio 被写入，且等于「音频轴跨度 / 墙钟」", async () => {
+  it("会话足够长时 stop() 后写入 ratio，且等于「音频轴跨度 / 墙钟」", async () => {
     vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_ID", "");
     vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_KEY", "");
     vi.spyOn(TencentAsrAdapter.prototype, "connect").mockResolvedValue();
@@ -218,21 +218,20 @@ describe("会话结束时自动落库标定因子（端到端）", () => {
 
     await orch.start({ audioSource: "microphone" });
     const sid = orch.getSnapshot().sessionId!;
-    // 直接塞区间（模拟 VAD 产出），音频轴跨 0..60000
     store.insertSpeechInterval({ id: "a", sessionId: sid, startMs: 0, endMs: 30000 });
     store.insertSpeechInterval({ id: "b", sessionId: sid, startMs: 40000, endMs: 60000 });
+
+    // 标定门槛是 30 秒（MIN_CALIBRATION_SPAN_MS）：测试里的会话墙钟只有毫秒级，
+    // 因此需要把 nowMs() 推进到门槛之上，才能验证「写入了正确的值」。
+    (orch as unknown as { sessionStartEpoch: number }).sessionStartEpoch = Date.now() - 60000;
 
     await orch.stop();
 
     const ratio = store.getSessionAudioClockRatio(sid);
     expect(ratio).not.toBeNull();
-    // 墙钟跨度是真实的会话时长（测试里很短），故比值会很大——
-    // 关键断言是「确实算了并落库」，而不是某个具体数值。
-    expect(Number.isFinite(ratio!)).toBe(true);
-    expect(ratio!).toBeGreaterThan(0);
-    // 音频轴跨度 60000 必须体现在比值里：ratio = 60000 / wallMs
-    const wall = 60000 / ratio!;
-    expect(wall).toBeGreaterThan(0);
+    // 音频轴跨度 60000 / 墙钟约 60000 → 接近 1（允许调度抖动）
+    expect(ratio!).toBeGreaterThan(0.8);
+    expect(ratio!).toBeLessThan(1.2);
   });
 
   it("没有区间时 ratio 保持 NULL（不写猜测值）", async () => {
@@ -251,6 +250,32 @@ describe("会话结束时自动落库标定因子（端到端）", () => {
     await orch.start({ audioSource: "microphone" });
     const sid = orch.getSnapshot().sessionId!;
     await orch.stop();
+    expect(store.getSessionAudioClockRatio(sid)).toBeNull();
+  });
+
+  it("极短会话不标定（2026-10-17 实测：11 秒会话算出 ratio=0.018 会放大语速 55 倍）", async () => {
+    // 真实事故：一次 11 秒的会话，音频轴跨 0.2 秒 → ratio=0.018。
+    // 拿它去标定等于把语速放大 55 倍，是「制造失真」而非「修正失真」。
+    // 门槛是 30 秒（见 orchestrator 的 MIN_CALIBRATION_SPAN_MS）。
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_ID", "");
+    vi.stubEnv("DSH_SECRET_TENCENT_ASR_SECRET_KEY", "");
+    vi.spyOn(TencentAsrAdapter.prototype, "connect").mockResolvedValue();
+    vi.spyOn(TencentAsrAdapter.prototype, "stop").mockResolvedValue();
+    vi.spyOn(TencentAsrAdapter.prototype, "sendPcm").mockResolvedValue();
+
+    const dir = tempDir("ratio-short");
+    const store = new Store(path.join(dir, "s.db"));
+    const orch = new SessionOrchestrator(store);
+    orch.setWindow({ isDestroyed: () => false, webContents: { send: () => {} } } as never);
+    resources.push({ store, dir, orch });
+
+    await orch.start({ audioSource: "microphone" });
+    const sid = orch.getSnapshot().sessionId!;
+    // 只有 200ms 区间（模拟短会话里的零星人声）
+    store.insertSpeechInterval({ id: "a", sessionId: sid, startMs: 2200, endMs: 2400 });
+    // 测试里会话实际只有毫秒级，远小于 30 秒门槛
+    await orch.stop();
+
     expect(store.getSessionAudioClockRatio(sid)).toBeNull();
   });
 });

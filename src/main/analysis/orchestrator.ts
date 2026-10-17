@@ -27,6 +27,21 @@ import { scheduledEndAt } from "../../shared/schedule";
 
 const PRE_START_BUFFER_MS = 3000;
 
+/**
+ * 音频钟标定所需的最短会话时长。
+ *
+ * 为什么需要门槛（2026-10-17 实测发现）：一次 11 秒的短会话算出的
+ * ratio = 0.018（11 秒里只有约 0.2 秒有声音），用它去标定会把语速放大 55 倍——
+ * 这不叫修正失真，叫制造失真。
+ *
+ * 标定因子的前提是「音频轴与墙钟之间存在稳定比例关系」，而这个前提
+ * 在极短会话上不成立：起止抖动、ASR 首包延迟占比过大。
+ *
+ * 取 30 秒：短于一次默认分析窗口（60s）的一半，确保「能标定的会话
+ * 至少跨过半个分析窗口」，不会拿一个几乎全是启动抖动的比值去校正整场。
+ */
+const MIN_CALIBRATION_SPAN_MS = 30000;
+
 export class SessionOrchestrator {
   private store: Store;
   private win: BrowserWindow | null = null;
@@ -467,12 +482,12 @@ export class SessionOrchestrator {
    * 但实时分析不能等会话结束——它需要当场一个可用因子。
    * 两者定义相同（音频轴 / 墙钟），故不会产生「实时一套、报告一套」的口径分裂。
    *
-   * 返回 null 表示「暂时算不出」（无区间 / 跨度非正），调用方按 1 处理（未标定）。
-   */
+    * 返回 null 表示「暂时算不出」（无区间 / 跨度非正 / 会话太短），调用方按 1 处理（未标定）。
+    */
   private liveAudioClockRatio(): number | null {
     if (!this.sessionId) return null;
     const wall = this.nowMs();
-    if (!(wall > 0)) return null;
+    if (!(wall > MIN_CALIBRATION_SPAN_MS)) return null;
     try {
       const intervals = this.store.querySpeechIntervals(this.sessionId, 0, Number.MAX_SAFE_INTEGER);
       if (!intervals.length) return null;
@@ -493,7 +508,7 @@ export class SessionOrchestrator {
    * 实时链路（60s 子窗口）与报告链路（全会话）都用它，保证同一场给出一致的语速。
    * 而音频轴的漂移（成段双份）没有任何记录，事后无法反推——错过此刻就没有了。
    *
-   * 边界：只在「查得到区间、跨度都为正」时写。否则留 NULL 表示未标定，
+   * 边界：只在「查得到区间、跨度都为正、且会话足够长」时写。否则留 NULL 表示未标定，
    * 由报告侧显式标注，**不写一个猜测值**（那正是 known-limitations 禁止的「造假数字」）。
    */
   private recordAudioClockRatio(): void {
@@ -504,8 +519,12 @@ export class SessionOrchestrator {
       const audioSpan = Math.max(...intervals.map((iv) => iv.endMs)) -
         Math.min(...intervals.map((iv) => iv.startMs));
       const wallSpan = this.nowMs();
-      // 墙钟跨度太小（会话刚开就停）时比值无意义，不写。
       if (!(audioSpan > 0) || !(wallSpan > 0)) return;
+      // 会话太短时不标定（2026-10-17 实测发现）：11 秒的会话算出的 ratio=0.018，
+      // 用它去标定会把语速放大约 55 倍——那不是修正失真，是制造失真。
+      // 标定因子的前提是「音频轴与墙钟之间存在稳定的比例关系」，
+      // 而这个前提在极短会话上不成立（起止抖动占比过大）。
+      if (wallSpan < MIN_CALIBRATION_SPAN_MS) return;
       this.store.setSessionAudioClockRatio(this.sessionId, audioSpan / wallSpan);
     } catch {
       // 标定是「尽力而为」的附加信息，它的失败绝不能让停止会话本身失败。
