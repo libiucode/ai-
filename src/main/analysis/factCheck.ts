@@ -155,16 +155,42 @@ function isServiceTermContext(text: string, valueStart: number, valueEnd: number
 }
 
 /**
+ * 判断一段事实文本是否是「规则说明」而非「商品参数断言」。
+ *
+ * 背景（实测发现）：框架的「已核实商品事实」字段经常既写商品参数、也写合规约束，
+ * 例如本项目的真实框架里就有一行：
+ *     「售后：7天无理由退换属平台法定规则，可以正常讲解，不视为违规」
+ * 若不排除，这一行会被解析成「时长=7天」的断言，之后主播说「30天无理由退换」
+ * 就会误报冲突 —— 而那句话本身完全合规。
+ *
+ * 同理，「不得使用『立竿见影』等表述」这类规则说明里的词也不该成为断言。
+ *
+ * 排除词覆盖：售后/退换/法定/规则/不得/禁止/视为/以…为准 等元陈述用语。
+ * 宁可漏解析（少一条断言），也不把合规说明当商品参数。
+ */
+function isMetaOrPolicyLine(raw: string): boolean {
+  return /售后|退换|退货|退款|法定|法规|规则|不得|禁止|不得使用|视为|不视为|以.{0,8}为准|请勿|注意|限制|约束|可以正常|合规/.test(
+    raw,
+  );
+}
+
+/**
  * 解析框架的「已核实商品事实」文本。
  *
  * 输入是 `Framework.productFacts`（自由文本，每行一条，见 FrameworkPage.tsx）。
  * 解析不出来的行**静默跳过**（自由描述型事实如「304不锈钢内胆」没有可核对断言）。
+ *
+ * 额外跳过两类行（见 isMetaOrPolicyLine 与测试反例）：
+ * - 合规规则说明行（「不得宣称医疗功效」这类）
+ * - 明确标注了「以…为准」的不确定值
  */
 export function parseFactAssertions(productFacts: string): FactAssertion[] {
   const out: FactAssertion[] = [];
   for (const line of productFacts.split(/\r?\n/)) {
     const raw = line.trim();
     if (!raw) continue;
+    // 规则说明 / 合规约束行不是商品参数断言，跳过。
+    if (isMetaOrPolicyLine(raw)) continue;
     // 一行里取第一个数值-单位对作为该事实的断言。
     // 一行多值时取首个：多值事实（如「容量500mL，重300克」）语义复杂，
     // 强行拆解容易误判，宁可少解析。

@@ -1,0 +1,127 @@
+{
+  "simulated": false,
+  "description": "真实可用的护肤品类话术框架（含合规约束与可核对事实）。商品事实按电商护肤品类常见合规表述编写，不含虚构参数；用于直播前请按你的真实商品资料逐条核对并替换。",
+  "framework": {
+    "id": "skincare-cosmetics-std",
+    "name": "护肤品专场（合规版）",
+    "productFacts": "商品：精华液 / 面霜 / 面膜（护肤品类）\n宣称限制：护肤品不得宣称医疗功效，不得承诺治愈、根治任何疾病\n不得使用「药到病除」「包治百病」「立竿见影」「纯天然」「零添加」「无副作用」等被明令禁止的绝对化或功效断言\n不得以「医生推荐」「明星同款」「械字号」等无资质依据的说法做背书\n效果表述必须加限定语，如「因人而异」「具体以产品说明为准」\n成分与浓度以包装标注或备案信息为准，不得夸大\n售后：7天无理由退换属平台法定规则，可以正常讲解，不视为违规\n价格与库存以商品页面实时信息为准，不得编造原价、折扣、限量\n敏感肌与孕妇人群不得做「可以放心使用」的无条件承诺，应提示「建议先做局部测试或咨询专业人士」",
+    "steps": [
+      {
+        "id": "step-opening",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "开场：欢迎新观众，说明今天主推的品类，不承诺任何效果",
+        "priority": 2,
+        "maxWaitMs": 60000
+      },
+      {
+        "id": "step-needs",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "痛点：结合换季干燥、屏障受损等场景，询问观众肤质",
+        "priority": 1,
+        "maxWaitMs": 90000
+      },
+      {
+        "id": "step-facts",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "成分与规格：按包装标注介绍核心成分，不说医疗功效，不夸大浓度",
+        "priority": 2,
+        "maxWaitMs": 120000
+      },
+      {
+        "id": "step-usage",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "用法与注意事项：说明使用步骤，提示敏感肌先做局部测试",
+        "priority": 2,
+        "maxWaitMs": 180000
+      },
+      {
+        "id": "step-interaction",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "互动：回答观众提问，读评论文，引导关注",
+        "priority": 1,
+        "maxWaitMs": 180000
+      },
+      {
+        "id": "step-offer",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "价格与售后：只报页面实时价，讲清7天无理由退换，不编造原价折扣",
+        "priority": 2,
+        "maxWaitMs": 240000
+      },
+      {
+        "id": "step-cta",
+        "frameworkId": "skincare-cosmetics-std",
+        "name": "成交引导：提示查看购物车规格，核对价格后自主下单",
+        "priority": 1,
+        "maxWaitMs": 300000
+      }
+    ],
+    "rules": [
+      {
+        "id": "rule-banned-medical",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": null,
+        "ruleType": "bannedWord",
+        "pattern": "治(?:疗|愈)|根治|药到病除|包治百病|消炎|祛疤|去痘印|医美级|医用级",
+        "enabled": true
+      },
+      {
+        "id": "rule-abs-instant",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-facts",
+        "ruleType": "absolutization",
+        "pattern": "立竿见影|立刻见效|马上见效|当天见效|一次就好|永久",
+        "enabled": true
+      },
+      {
+        "id": "rule-abs-purity",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-facts",
+        "ruleType": "absolutization",
+        "pattern": "纯天然|零添加|无副作用|无任何刺激|绝对安全|百分百安全",
+        "enabled": true
+      },
+      {
+        "id": "rule-abs-endorse",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": null,
+        "ruleType": "bannedWord",
+        "pattern": "医生推荐|专家推荐|明星同款|明星同款|械字号|三甲医院",
+        "enabled": true
+      },
+      {
+        "id": "rule-unverified-price",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-offer",
+        "ruleType": "unverifiedClaim",
+        "pattern": "原价\\s*[¥￥]?\\s*\\d+|专柜价\\s*[¥￥]?\\s*\\d+|平时(?:都要|要卖)\\s*\\d+|\\d+\\s*折",
+        "enabled": true
+      },
+      {
+        "id": "rule-unverified-effect",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-facts",
+        "ruleType": "unverifiedClaim",
+        "pattern": "(?:坚持|连续)(?:用|使用)?\\s*\\d+\\s*天[^。，,！!？?]{0,8}(?:就|便|能|可以)|\\d+\\s*天(?:见效|淡化|变白|祛斑)",
+        "enabled": true
+      },
+      {
+        "id": "rule-unverified-stock",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-offer",
+        "ruleType": "unverifiedClaim",
+        "pattern": "只剩\\s*\\d+|最后\\s*\\d+\\s*(?:件|单|瓶)|库存只剩",
+        "enabled": true
+      },
+      {
+        "id": "rule-hotword",
+        "frameworkId": "skincare-cosmetics-std",
+        "stepId": "step-facts",
+        "ruleType": "hotWord",
+        "pattern": "烟酰胺|二裂酵母|依克多因|神经酰胺|玻尿酸|透明质酸|修护|屏障",
+        "enabled": true
+      }
+    ],
+    "updatedAt": "2026-10-17T08:40:00.000Z"
+  }
+}

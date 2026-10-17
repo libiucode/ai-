@@ -51,6 +51,32 @@ describe("事实解析：只解析得出可核对断言，其余静默跳过", (
     const facts = parseFactAssertions("保温12小时\n容量500毫升\n304不锈钢内胆");
     expect(facts).toHaveLength(2);
   });
+
+  it("合规规则说明行不得被当成商品参数（实测发现的误报来源）", () => {
+    // 真实框架里的一行：「售后：7天无理由退换属平台法定规则，可以正常讲解，不视为违规」
+    // 若不排除，会被解析成「时长=7天」的断言，之后主播说「30天无理由退换」就会误报。
+    const facts = parseFactAssertions(
+      "售后：7天无理由退换属平台法定规则，可以正常讲解，不视为违规",
+    );
+    expect(facts).toHaveLength(0);
+  });
+
+  it.each([
+    "不得使用「立竿见影」等表述",
+    "不得宣称医疗功效",
+    "禁止承诺治愈任何疾病",
+    "价格以商品页面实时信息为准",
+    "注意：首次使用前清洗",
+    "合规约束：不得做无条件承诺",
+  ])("规则说明行被排除：%s", (line) => {
+    expect(parseFactAssertions(line)).toHaveLength(0);
+  });
+
+  it("真实商品参数行仍能解析（排除规则不能过宽）", () => {
+    const facts = parseFactAssertions("实验室恒温测试12小时（25℃环境）");
+    expect(facts).toHaveLength(1);
+    expect(facts[0].value).toBe(12);
+  });
 });
 
 describe("数值冲突：应当报", () => {
